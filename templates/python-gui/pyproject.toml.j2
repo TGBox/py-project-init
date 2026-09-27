@@ -1,0 +1,26 @@
+[project]
+name = "{{ project_slug }}"
+version = "0.1.0"
+description = "{{ description }}"
+requires-python = ">=3.11"
+dependencies = [
+{% if framework == "pyside6" %}
+    "pyside6",
+{% elif framework == "pyqt6" %}
+    "pyqt6",
+{% elif framework == "wxpython" %}
+    "wxpython",
+{% elif framework == "kivy" %}
+    "kivy",
+{% endif %}
+]
+
+[project.scripts]
+{{ project_slug }} = "{{ project_slug }}:main"
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 100

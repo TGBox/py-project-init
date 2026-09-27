@@ -1,0 +1,32 @@
+# {{ project_name }}
+
+{{ description }}
+
+## Voraussetzungen
+
+- Rust 1.75+ (`rustup` empfohlen)
+- Cargo
+{% if framework == "tauri" %}
+- Node.js (für das Web-Frontend)
+- [Tauri CLI](https://tauri.app/v1/guides/getting-started/prerequisites)
+{% endif %}
+
+## Setup & Ausführen
+
+```bash
+cargo run
+```
+
+## Framework
+
+Dieses Projekt verwendet **{% if framework == "egui" %}egui / eframe{% elif framework == "iced" %}Iced{% elif framework == "tauri" %}Tauri{% elif framework == "slint" %}Slint{% elif framework == "gtk4" %}GTK4 (gtk4-rs){% endif %}**.
+
+## Projektstruktur
+
+```
+{{ project_name }}/
+├── src/
+│   └── main.rs
+├── Cargo.toml
+└── README.md
+```

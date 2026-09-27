@@ -1,0 +1,38 @@
+name: "Python GUI"
+language: "Python"
+description: "Desktop-GUI-Anwendung mit Python und einem wählbaren Framework"
+options:
+  - id: "framework"
+    type: "select"
+    label: "GUI-Framework"
+    description: "Wähle das Framework für deine GUI-Anwendung"
+    default: "pyside6"
+    choices:
+      - value: "pyside6"
+        label: "PySide6 (Qt for Python)"
+        description: "Offizielle Qt-Bindings von The Qt Company. Sehr mächtig, native Optik auf allen Plattformen, große Widget-Bibliothek. Empfohlen für professionelle Desktop-Apps."
+      - value: "pyqt6"
+        label: "PyQt6"
+        description: "Inoffizielle Qt-Bindings von Riverbank Computing. Technisch identisch zu PySide6, aber GPL-lizenziert – für proprietäre Software ist eine kommerzielle Lizenz nötig."
+      - value: "tkinter"
+        label: "Tkinter"
+        description: "In Python integriert, keine Installation nötig. Einfach zu lernen, aber veraltetes Aussehen und eingeschränkte Widget-Auswahl. Gut für kleine Hilfsprogramme."
+      - value: "wxpython"
+        label: "wxPython"
+        description: "Nutzt native OS-Widgets (Win32, Cocoa, GTK). Sieht wirklich nativ aus, aber komplexere API und kleinere Community als Qt."
+      - value: "kivy"
+        label: "Kivy"
+        description: "Speziell für Touch-UIs und Cross-Platform (inkl. Android/iOS). Eigenes Rendering, kein natives Look-and-Feel – ideal für Kiosk- oder Touch-Anwendungen."
+  - id: "github_actions"
+    type: "bool"
+    label: "GitHub Actions CI"
+    description: "Automatisierter CI-Workflow mit Ruff (Linting) und Pytest"
+    default: true
+  - id: "vscode"
+    type: "bool"
+    label: "VS Code Konfiguration (.vscode/)"
+    description: "settings.json und launch.json für optimale Entwicklungserfahrung in VS Code"
+    default: true
+hooks:
+  post_create:
+    - ["uv", "sync"]

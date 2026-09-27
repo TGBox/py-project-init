@@ -1,0 +1,15 @@
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+#[command(name = "{{ project_name }}", version, about = "{{ description }}")]
+struct Cli {
+    #[arg(short, long, default_value = "World")]
+    name: String,
+}
+
+fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
+    let args = Cli::parse();
+    println!("Hello, {}!", args.name);
+    Ok(())
+}

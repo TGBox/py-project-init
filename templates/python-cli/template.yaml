@@ -1,0 +1,16 @@
+name: "Python CLI"
+language: "Python"
+description: "Standard CLI-Setup mit uv, pytest und ruff"
+options:
+  - id: "docker"
+    label: "Dockerfile & Compose einbinden"
+    default: false
+  - id: "github_actions"
+    label: "CI-Workflow (.github/workflows/ci.yml)"
+    default: true
+  - id: "vscode"
+    label: "VS Code Configs (.vscode/settings.json)"
+    default: true
+hooks:
+  post_create:
+    - ["uv", "init", "--no-workspace", "."]

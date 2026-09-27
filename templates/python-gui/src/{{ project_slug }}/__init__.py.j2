@@ -1,0 +1,65 @@
+import sys
+{% if framework == "pyside6" %}
+from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
+from PySide6.QtCore import Qt
+{% elif framework == "pyqt6" %}
+from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel
+from PyQt6.QtCore import Qt
+{% elif framework == "tkinter" %}
+import tkinter as tk
+{% elif framework == "wxpython" %}
+import wx
+{% elif framework == "kivy" %}
+from kivy.app import App
+from kivy.uix.label import Label
+{% endif %}
+
+
+{% if framework in ["pyside6", "pyqt6"] %}
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("{{ project_name }}")
+        self.resize(800, 600)
+        label = QLabel("Hallo aus {{ project_name }}!", alignment=Qt.AlignmentFlag.AlignCenter)
+        self.setCentralWidget(label)
+
+
+def main() -> None:
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+{% elif framework == "tkinter" %}
+def main() -> None:
+    root = tk.Tk()
+    root.title("{{ project_name }}")
+    root.geometry("800x600")
+    label = tk.Label(root, text="Hallo aus {{ project_name }}!", font=("Arial", 18))
+    label.pack(expand=True)
+    root.mainloop()
+{% elif framework == "wxpython" %}
+class MainFrame(wx.Frame):
+    def __init__(self):
+        super().__init__(None, title="{{ project_name }}", size=(800, 600))
+        panel = wx.Panel(self)
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        label = wx.StaticText(panel, label="Hallo aus {{ project_name }}!")
+        sizer.Add(label, 1, wx.ALIGN_CENTER | wx.ALL, 20)
+        panel.SetSizer(sizer)
+
+
+def main() -> None:
+    app = wx.App()
+    frame = MainFrame()
+    frame.Show()
+    app.MainLoop()
+{% elif framework == "kivy" %}
+class {{ project_slug | title }}App(App):
+    def build(self):
+        return Label(text="Hallo aus {{ project_name }}!")
+
+
+def main() -> None:
+    {{ project_slug | title }}App().run()
+{% endif %}

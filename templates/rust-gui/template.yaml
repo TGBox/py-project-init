@@ -1,0 +1,38 @@
+name: "Rust GUI"
+language: "Rust"
+description: "Desktop-GUI-Anwendung mit Rust und einem wählbaren Framework"
+options:
+  - id: "framework"
+    type: "select"
+    label: "GUI-Framework"
+    description: "Wähle das Framework für deine Rust-GUI-Anwendung"
+    default: "egui"
+    choices:
+      - value: "egui"
+        label: "egui / eframe"
+        description: "Sofort-Modus-GUI (Immediate Mode) – sehr einfach zu nutzen, kein State-Management nötig. Läuft nativ und im Browser (WASM). Ideal für Tools, Dashboards und Dev-UIs."
+      - value: "iced"
+        label: "Iced"
+        description: "Elm-inspiriertes retained-mode Framework mit starker Typsicherheit. Sauber strukturiertes Update/View-Modell, gute WASM-Unterstützung. Für komplexere Anwendungen."
+      - value: "tauri"
+        label: "Tauri"
+        description: "Rust-Backend + Web-Frontend (HTML/CSS/JS). Sehr kleine Binärgröße, nativer Webview statt Electron. Ideal wenn du UI-Kenntnisse aus dem Web mitbringst."
+      - value: "slint"
+        label: "Slint"
+        description: "Deklarative UI-Sprache (.slint-Dateien) mit Rust-Backend. Sehr schnell, embedded-fähig, gute IDE-Integration. Gut für produktionsreife Desktop- und Embedded-Apps."
+      - value: "gtk4"
+        label: "GTK4 (gtk4-rs)"
+        description: "Offizielle GTK4-Bindings für Rust. Natives Linux-Look-and-Feel (GNOME), läuft auch auf Windows/macOS. Für plattformübergreifende Apps mit Linux-Fokus."
+  - id: "github_actions"
+    type: "bool"
+    label: "GitHub Actions CI (Fmt, Clippy, Test)"
+    description: "Automatisierter CI-Workflow: rustfmt-Check, Clippy-Linting und Cargo-Tests"
+    default: true
+  - id: "docker"
+    type: "bool"
+    label: "Multi-Stage Dockerfile"
+    description: "Dockerfile mit Build-Stage und schlankem Runtime-Image (nur für headless/Tauri geeignet)"
+    default: false
+hooks:
+  post_create:
+    - ["cargo", "check"]

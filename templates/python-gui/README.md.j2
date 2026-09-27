@@ -1,0 +1,37 @@
+# {{ project_name }}
+
+{{ description }}
+
+## Voraussetzungen
+
+- Python 3.11+
+- [uv](https://docs.astral.sh/uv/)
+{% if framework == "pyside6" or framework == "pyqt6" %}
+- Qt 6 (wird automatisch über uv installiert)
+{% endif %}
+
+## Setup
+
+```bash
+uv sync
+uv run python -m {{ project_slug }}
+```
+
+## Framework
+
+Dieses Projekt verwendet **{% if framework == "pyside6" %}PySide6{% elif framework == "pyqt6" %}PyQt6{% elif framework == "tkinter" %}Tkinter{% elif framework == "wxpython" %}wxPython{% elif framework == "kivy" %}Kivy{% endif %}**.
+
+## Projektstruktur
+
+```
+{{ project_name }}/
+├── src/
+│   └── {{ project_slug }}/
+│       ├── __init__.py
+│       ├── __main__.py
+│       └── ui/
+│           └── main_window.py
+├── tests/
+├── pyproject.toml
+└── README.md
+```

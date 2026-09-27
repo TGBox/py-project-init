@@ -1,0 +1,98 @@
+{% if framework == "egui" %}
+fn main() -> eframe::Result<()> {
+    let options = eframe::NativeOptions::default();
+    eframe::run_native(
+        "{{ project_name }}",
+        options,
+        Box::new(|_cc| Ok(Box::new({{ project_slug | title }}App::default()))),
+    )
+}
+
+#[derive(Default)]
+struct {{ project_slug | title }}App;
+
+impl eframe::App for {{ project_slug | title }}App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("{{ project_name }}");
+            ui.label("Hallo aus {{ project_name }}!");
+        });
+    }
+}
+{% elif framework == "iced" %}
+use iced::widget::{column, text};
+use iced::Element;
+
+pub fn main() -> iced::Result {
+    iced::run("{{ project_name }}", App::update, App::view)
+}
+
+#[derive(Default)]
+struct App;
+
+#[derive(Debug, Clone)]
+enum Message {}
+
+impl App {
+    fn update(&mut self, _message: Message) {}
+
+    fn view(&self) -> Element<Message> {
+        column![
+            text("{{ project_name }}").size(32),
+            text("Hallo aus {{ project_name }}!"),
+        ]
+        .padding(20)
+        .into()
+    }
+}
+{% elif framework == "tauri" %}
+// Tauri verwendet ein Web-Frontend. Siehe src-tauri/ für den Rust-Backend-Code.
+fn main() {
+    tauri::Builder::default()
+        .run(tauri::generate_context!())
+        .expect("Fehler beim Starten der Tauri-Anwendung");
+}
+{% elif framework == "slint" %}
+slint::slint! {
+    export component AppWindow inherits Window {
+        title: "{{ project_name }}";
+        width: 800px;
+        height: 600px;
+        Text {
+            text: "Hallo aus {{ project_name }}!";
+            font-size: 24px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+fn main() {
+    let ui = AppWindow::new().unwrap();
+    ui.run().unwrap();
+}
+{% elif framework == "gtk4" %}
+use gtk4::prelude::*;
+use gtk4::{Application, ApplicationWindow, Label};
+
+fn main() {
+    let app = Application::builder()
+        .application_id("com.example.{{ project_slug }}")
+        .build();
+
+    app.connect_activate(|app| {
+        let window = ApplicationWindow::builder()
+            .application(app)
+            .title("{{ project_name }}")
+            .default_width(800)
+            .default_height(600)
+            .build();
+
+        let label = Label::new(Some("Hallo aus {{ project_name }}!"));
+        window.set_child(Some(&label));
+        window.present();
+    });
+
+    app.run();
+}
+{% endif %}

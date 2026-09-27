@@ -1,0 +1,14 @@
+# {{ project_name }}
+
+{{ description }}
+
+## Tech-Stack
+- **Sprache:** Rust (Edition 2021)
+- **CLI-Parser:** `clap` (derive API)
+{% if github_actions %}- **CI/CD:** GitHub Actions (Fmt, Clippy, Tests){% endif %}
+
+## Quickstart
+```bash
+cargo build --release
+cargo run -- --name "Developer"
+cargo test

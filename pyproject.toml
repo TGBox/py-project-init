@@ -7,7 +7,11 @@ authors = [
     { name = "Daniel Rösch", email = "droesch91@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "jinja2",
+    "pyside6",
+    "pyyaml>=6.0.3",
+]
 
 [project.scripts]
 py-project-init = "py_project_init:main"

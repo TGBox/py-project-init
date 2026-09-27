@@ -1,0 +1,13 @@
+name: "Rust CLI"
+language: "Rust"
+description: "Performantes Rust CLI-Projekt mit Cargo, Clippy und GitHub Actions"
+options:
+  - id: "github_actions"
+    label: "GitHub Actions CI (Fmt, Clippy, Test)"
+    default: true
+  - id: "docker"
+    label: "Multi-Stage Dockerfile"
+    default: false
+hooks:
+  post_create:
+    - ["cargo", "check"]

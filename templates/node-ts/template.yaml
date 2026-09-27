@@ -1,0 +1,13 @@
+name: "Node.js / TypeScript"
+language: "TypeScript"
+description: "Node.js Projekt mit TypeScript, Vitest, ESLint und Prettier"
+options:
+  - id: "github_actions"
+    label: "GitHub Actions CI (Lint, Typecheck, Test)"
+    default: true
+  - id: "docker"
+    label: "Dockerfile (Node Alpine)"
+    default: false
+hooks:
+  post_create:
+    - ["npm", "install"]

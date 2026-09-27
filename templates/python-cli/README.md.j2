@@ -1,0 +1,34 @@
+# {{ project_name }}
+
+{{ description }}
+
+## Tech-Stack
+
+- **Sprache:** {{ language }}
+- **Build / Packaging:** uv
+{% if docker %}- **Container:** Docker & Compose{% endif %}
+{% if github_actions %}- **CI/CD:** GitHub Actions{% endif %}
+
+## Ordnerstruktur
+
+```text
+{{ project_slug }}/
+├── src/
+│   └── {{ project_slug }}/
+│       ├── __init__.py
+│       └── main.py
+├── tests/
+{% if docker %}├── Dockerfile{% endif %}
+{% if github_actions %}├── .github/workflows/ci.yml{% endif %}
+├── .gitignore
+├── pyproject.toml
+└── README.md
+```
+
+## Quickstart
+
+```bash
+git clone <repo-url>
+cd {{ project_slug }}
+uv sync
+```

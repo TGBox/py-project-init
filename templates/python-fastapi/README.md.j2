@@ -1,0 +1,31 @@
+# {{ project_name }}
+
+{{ description }}
+
+## Tech-Stack
+
+- **Framework:** FastAPI & Pydantic v2
+- **Package-Manager:** uv
+- **Linter/Formatter:** Ruff
+{% if docker %}- **Container:** Docker & Docker Compose{% endif %}
+{% if github_actions %}- **CI/CD:** GitHub Actions{% endif %}
+
+## Lokale Entwicklung
+
+```bash
+uv sync
+uv run uvicorn src.{{ project_slug }}.main:app --reload
+```
+
+## Tests
+
+```bash
+uv run pytest
+uv run ruff check .
+```
+
+## Docker
+
+```bash
+docker compose up --build
+```
