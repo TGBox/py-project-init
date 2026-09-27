@@ -48,24 +48,30 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
 ## 📥 Installation & Start
 
 ### 1. Repository klonen
+
 ```bash
 git clone https://github.com/DaniBani/py-project-init.git
 cd py-project-init
 ```
 
 ### 2. Abhängigkeiten synchronisieren
+
 Mit `uv`:
+
 ```bash
 uv sync
 ```
 
 ### 3. Anwendung starten
+
 Über den Skript-Einstiegspunkt:
+
 ```bash
 uv run py-project-init
 ```
 
 Oder direkt als Python-Modul:
+
 ```bash
 uv run python -m py_project_init
 ```
@@ -85,7 +91,8 @@ templates/
         └── main.py.j2
 ```
 
-### Beispiel `template.yaml`:
+### Beispiel `template.yaml`
+
 ```yaml
 name: Meine Vorlage
 language: Python
