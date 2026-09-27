@@ -1,25 +1,19 @@
-import os
 import re
 import sys
 import shutil
-import subprocess
 from pathlib import Path
-from PySide6.QtCore import QThread, Signal, QSettings, Qt, QByteArray
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtCore import QThread, Signal, QSettings, QByteArray, QUrl
+from PySide6.QtGui import QAction, QKeySequence, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QComboBox, QCheckBox, QPushButton, QTextEdit,
-    QFileDialog, QLabel, QGroupBox, QMessageBox, QMenuBar, QMenu
+    QFileDialog, QLabel, QGroupBox, QMessageBox
 )
-from py_project_init.core.generator import TemplateManager, ProjectGenerator
+from py_project_init.core.generator import TemplateManager
 from py_project_init.ui.styles import DARK_THEME
 
 CHECKED_TOOLS = ["git", "uv", "cargo", "npm"]
 _VALID_NAME = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*$")
-
-
-def check_cli_tool(tool_name: str) -> bool:
-    return shutil.which(tool_name) is not None
 
 
 class GenerateWorker(QThread):
@@ -27,7 +21,7 @@ class GenerateWorker(QThread):
     # ok, target_dir_str, was_cancelled
     finished_signal = Signal(bool, str, bool)
 
-    def __init__(self, generator: ProjectGenerator, target_dir: Path, template_id: str, context: dict):
+    def __init__(self, generator: TemplateManager, target_dir: Path, template_id: str, context: dict):
         super().__init__()
         self.generator = generator
         self.target_dir = target_dir
@@ -72,16 +66,9 @@ class MainWindow(QMainWindow):
         self.default_templates_dir = base_dir / "templates"
 
         # Load any custom templates directories from settings
-        custom_dirs_raw = self.settings.value("custom_templates_dirs", [])
-        custom_dirs = []
-        if isinstance(custom_dirs_raw, list):
-            for p in custom_dirs_raw:
-                path_obj = Path(p)
-                if path_obj.exists() and path_obj.is_dir():
-                    custom_dirs.append(path_obj)
-
+        custom_dirs = [Path(p) for p in self.settings.value("custom_templates_dirs", []) if Path(p).is_dir()]
         self.template_manager = TemplateManager(self.default_templates_dir, custom_dirs=custom_dirs)
-        self.generator = ProjectGenerator(self.template_manager)
+        self.generator = self.template_manager
 
         self.tool_statuses: dict[str, bool] = {}
         self.option_checkboxes: dict[str, QCheckBox] = {}
@@ -317,7 +304,7 @@ class MainWindow(QMainWindow):
                 widget.deleteLater()
 
         for tool in CHECKED_TOOLS:
-            available = check_cli_tool(tool)
+            available = bool(shutil.which(tool))
             self.tool_statuses[tool] = available
             badge = QLabel(f" {'✔' if available else '✖'} {tool} ")
             bg_color = "#27ae60" if available else "#c0392b"
@@ -399,7 +386,7 @@ class MainWindow(QMainWindow):
         """Resets custom templates directories to default."""
         self.settings.remove("custom_templates_dirs")
         self.template_manager = TemplateManager(self.default_templates_dir)
-        self.generator = ProjectGenerator(self.template_manager)
+        self.generator = self.template_manager
         self._populate_templates()
         self._on_template_changed()
         QMessageBox.information(
@@ -476,7 +463,6 @@ class MainWindow(QMainWindow):
 
     def _load_saved_settings(self):
         """Restores previous window geometry, state, and paths from QSettings."""
-        # Restore window geometry & state
         geom = self.settings.value("geometry")
         if isinstance(geom, QByteArray):
             self.restoreGeometry(geom)
@@ -486,14 +472,13 @@ class MainWindow(QMainWindow):
             self.restoreState(state)
 
         # Fullscreen state
-        is_fullscreen = self.settings.value("fullscreen", False, type=bool)
-        if is_fullscreen:
+        if self.settings.value("fullscreen", False, type=bool):
             self.showFullScreen()
             self.fullscreen_action.setChecked(True)
 
         # Restore last base path
         last_path = self.settings.value("last_path", "")
-        if last_path and Path(last_path).exists():
+        if last_path and Path(last_path).is_dir():
             self.path_input.setText(last_path)
         else:
             default_path = str(Path.home() / "Documents")
@@ -519,11 +504,10 @@ class MainWindow(QMainWindow):
 
     def _select_path(self):
         current_val = self.path_input.text().strip()
-        start_dir = current_val if Path(current_val).exists() else str(Path.home())
+        start_dir = current_val if Path(current_val).is_dir() else str(Path.home())
         folder = QFileDialog.getExistingDirectory(self, "Basis-Zielordner auswählen", start_dir)
         if folder:
             self.path_input.setText(folder)
-            self._save_path_setting(folder)
 
     # ── Generierung & Abbruch ───────────────────────────────────────────────
 
@@ -625,19 +609,14 @@ class MainWindow(QMainWindow):
         if not self._last_target_dir:
             return
         path = Path(self._last_target_dir)
-        if not path.exists():
+        if not path.is_dir():
             QMessageBox.warning(self, "Nicht gefunden", f"Verzeichnis nicht mehr vorhanden:\n{path}")
             return
         self._open_directory(path)
 
     def _open_directory(self, path: Path):
         """Opens a folder in the native platform file manager."""
-        if sys.platform == "win32":
-            subprocess.Popen(["explorer", str(path)])
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(path)])
-        else:
-            subprocess.Popen(["xdg-open", str(path)])
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
     # ── Über-Dialog ─────────────────────────────────────────────────────────
 

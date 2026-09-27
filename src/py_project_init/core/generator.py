@@ -1,8 +1,8 @@
-import os
 import subprocess
 from pathlib import Path
 import yaml
 from jinja2 import Environment, FileSystemLoader
+
 
 class TemplateManager:
     def __init__(self, templates_dir: Path, custom_dirs: list[Path] | None = None):
@@ -38,30 +38,25 @@ class TemplateManager:
                     except Exception as e:
                         print(f"Fehler beim Laden von {yaml_file}: {e}")
 
-class ProjectGenerator:
-    def __init__(self, template_manager: TemplateManager):
-        self.manager = template_manager
-
     def generate(self, target_dir: Path, template_id: str, context: dict, log_callback=print, is_cancelled=None):
         def check_cancel():
             if is_cancelled and is_cancelled():
                 raise InterruptedError("Initialisierung durch Benutzer abgebrochen.")
 
-        template_meta = self.manager.templates.get(template_id)
+        template_meta = self.templates.get(template_id)
         if not template_meta:
             raise ValueError(f"Template '{template_id}' nicht gefunden.")
 
-        template_path = template_meta["path"]
+        template_path: Path = template_meta["path"]
         env = Environment(loader=FileSystemLoader(template_path))
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        # Bedingungen aus template.yaml laden: [{"pattern": "...", "when": "ctx_key"}]
         file_conditions: list[dict] = template_meta.get("file_conditions", [])
 
-        # 1. Dateien & Ordnerstrukturen iterieren und rendern
-        for root, dirs, files in os.walk(template_path):
+        # 1. Dateien & Ordnerstrukturen iterieren und rendern (Path.walk ab Python 3.12)
+        for root, dirs, files in template_path.walk():
             check_cancel()
-            rel_path = Path(root).relative_to(template_path)
+            rel_path = root.relative_to(template_path)
             if "template.yaml" in files:
                 files.remove("template.yaml")
 
@@ -70,24 +65,23 @@ class ProjectGenerator:
 
             for file in files:
                 check_cancel()
-                # Pruefen ob die Datei durch eine `when:`-Bedingung bedingt ist
                 if not self._should_include(rel_path, file, file_conditions, context):
                     continue
 
-                src_file = Path(root) / file
+                src_file = root / file
                 dest_filename = file[:-3] if file.endswith(".j2") else file
                 dest_filename = env.from_string(dest_filename).render(context)
                 dest_file = dest_dir / dest_filename
 
                 if file.endswith(".j2"):
-                    template = env.get_template(str(Path(rel_path) / file).replace("\\", "/"))
+                    template = env.get_template(str(rel_path / file).replace("\\", "/"))
                     dest_file.write_text(template.render(context), encoding="utf-8")
                 else:
                     dest_file.write_bytes(src_file.read_bytes())
 
                 log_callback(f"Angelegt: {dest_file.relative_to(target_dir)}")
 
-        # 2. Optionale Post-Create Hooks (z. B. uv sync, npm install, cargo check)
+        # 2. Optionale Post-Create Hooks
         hooks = template_meta.get("hooks", {}).get("post_create", [])
         for cmd in hooks:
             check_cancel()
@@ -108,7 +102,7 @@ class ProjectGenerator:
         for entry in conditions:
             pattern = entry.get("pattern", "")
             ctx_key = entry.get("when", "")
-            if full_rel.startswith(pattern) or full_rel == pattern:
+            if full_rel.startswith(pattern):
                 if not context.get(ctx_key, False):
                     return False
         return True
@@ -128,3 +122,7 @@ class ProjectGenerator:
                 log_callback(f"Git-Meldung: {res.stderr.strip()}")
             else:
                 log_callback(f"Erfolg: {' '.join(cmd)}")
+
+
+# Backward compatibility alias
+ProjectGenerator = TemplateManager
