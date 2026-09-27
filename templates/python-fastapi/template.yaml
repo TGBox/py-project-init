@@ -8,6 +8,13 @@ options:
   - id: "github_actions"
     label: "GitHub Actions CI (Ruff, Pytest)"
     default: true
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: "Dockerfile"
+    when: "docker"
+  - pattern: "docker-compose"
+    when: "docker"
 hooks:
   post_create:
     - ["uv", "sync"]

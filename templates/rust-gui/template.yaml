@@ -33,6 +33,13 @@ options:
     label: "Multi-Stage Dockerfile"
     description: "Dockerfile mit Build-Stage und schlankem Runtime-Image (nur für headless/Tauri geeignet)"
     default: false
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: "Dockerfile"
+    when: "docker"
+  - pattern: "docker-compose"
+    when: "docker"
 hooks:
   post_create:
     - ["cargo", "check"]

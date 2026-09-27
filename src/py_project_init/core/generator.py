@@ -40,6 +40,9 @@ class ProjectGenerator:
         env = Environment(loader=FileSystemLoader(template_path))
         target_dir.mkdir(parents=True, exist_ok=True)
 
+        # Bedingungen aus template.yaml laden: [{"pattern": "...", "when": "ctx_key"}]
+        file_conditions: list[dict] = template_meta.get("file_conditions", [])
+
         # 1. Dateien & Ordnerstrukturen iterieren und rendern
         for root, dirs, files in os.walk(template_path):
             rel_path = Path(root).relative_to(template_path)
@@ -50,8 +53,8 @@ class ProjectGenerator:
             dest_dir.mkdir(parents=True, exist_ok=True)
 
             for file in files:
-                # Optionale Feature-Dateien ausschließen, falls Option deaktiviert
-                if (file.startswith("docker") or "docker" in file) and not context.get("docker", False):
+                # Pruefen ob die Datei durch eine `when:`-Bedingung bedingt ist
+                if not self._should_include(rel_path, file, file_conditions, context):
                     continue
 
                 src_file = Path(root) / file
@@ -70,13 +73,26 @@ class ProjectGenerator:
         # 2. Optionale Post-Create Hooks (z. B. uv sync, npm install, cargo check)
         hooks = template_meta.get("hooks", {}).get("post_create", [])
         for cmd in hooks:
-            log_callback(f"Führe Hook aus: {' '.join(cmd)}")
+            log_callback(f"Fuehre Hook aus: {' '.join(cmd)}")
             res = subprocess.run(cmd, cwd=target_dir, capture_output=True, text=True, shell=True)
             if res.returncode != 0:
                 log_callback(f"Warnung bei Hook: {res.stderr.strip()}")
+            elif res.stdout.strip():
+                log_callback(res.stdout.strip())
 
         # 3. Git initialisieren und initial committen
         self._init_git(target_dir, log_callback)
+
+    def _should_include(self, rel_path: Path, filename: str, conditions: list[dict], context: dict) -> bool:
+        """Gibt False zurueck wenn eine `when:`-Bedingung nicht erfuellt ist."""
+        full_rel = str(rel_path / filename).replace("\\", "/")
+        for entry in conditions:
+            pattern = entry.get("pattern", "")
+            ctx_key = entry.get("when", "")
+            if full_rel.startswith(pattern) or full_rel == pattern:
+                if not context.get(ctx_key, False):
+                    return False
+        return True
 
     def _init_git(self, target_dir: Path, log_callback):
         log_callback("Initialisiere Git Repository...")

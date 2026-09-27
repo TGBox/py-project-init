@@ -33,6 +33,11 @@ options:
     label: "VS Code Konfiguration (.vscode/)"
     description: "settings.json und launch.json für optimale Entwicklungserfahrung in VS Code"
     default: true
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: ".vscode/"
+    when: "vscode"
 hooks:
   post_create:
     - ["uv", "sync"]

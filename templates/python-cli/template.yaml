@@ -11,6 +11,15 @@ options:
   - id: "vscode"
     label: "VS Code Configs (.vscode/settings.json)"
     default: true
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: "Dockerfile"
+    when: "docker"
+  - pattern: "docker-compose"
+    when: "docker"
+  - pattern: ".vscode/"
+    when: "vscode"
 hooks:
   post_create:
-    - ["uv", "init", "--no-workspace", "."]
+    - ["uv", "sync"]
