@@ -10,7 +10,8 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QComboBox, QCheckBox, QPushButton, QTextEdit,
     QFileDialog, QLabel, QGroupBox, QMessageBox, QScrollArea,
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
+    QTabWidget, QSplitter, QFrame
 )
 from py_project_init.core.generator import TemplateManager
 from py_project_init.ui.styles import DARK_THEME
@@ -60,7 +61,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Project Scaffolder - Projekt-Initialisierung")
-        self.resize(840, 880)
+        self.resize(1080, 800)
+        self.setMinimumSize(880, 620)
 
         # Persistent settings
         self.settings = QSettings("DaniBani", "PyProjectInit")
@@ -91,6 +93,7 @@ class MainWindow(QMainWindow):
         self._populate_templates()
         self._populate_git_hooks()
         self._refresh_agent_configs()
+        self._update_summary()
 
     def _apply_theme(self):
         """Applies the modern dark stylesheet to the main window."""
@@ -191,34 +194,66 @@ class MainWindow(QMainWindow):
         else:
             self.showFullScreen()
             self.fullscreen_action.setChecked(True)
-            self.statusBar().showMessage("Vollbildmodus aktiviert (Drücke F11 zum Beenden)", 3000)
-
-    # ── UI Aufbau ───────────────────────────────────────────────────────────
+            self.statusBar().showMessage("Vollbildmodus aktiviert (Drücken Sie F11 zum Verlassen)", 2500)
 
     def _init_ui(self):
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        self.setCentralWidget(scroll)
+        root = QWidget()
+        self.setCentralWidget(root)
+        root_layout = QVBoxLayout(root)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
-        container = QWidget()
-        scroll.setWidget(container)
+        # ── 1. Header Toolbar (Titel & Tool-Status Pills) ───────────────────
+        header_bar = QWidget()
+        header_bar.setObjectName("headerBar")
+        header_layout = QHBoxLayout(header_bar)
+        header_layout.setContentsMargins(16, 8, 16, 8)
+        header_layout.setSpacing(12)
 
-        layout = QVBoxLayout(container)
-        layout.setSpacing(12)
-        layout.setContentsMargins(16, 16, 16, 16)
+        header_title = QLabel("🚀 Project Scaffolder")
+        header_title.setStyleSheet("font-size: 15px; font-weight: bold; color: #7aa2f7;")
+        header_sub = QLabel("Jinja2 • UV • Git-Hooks • Coding-Agents")
+        header_sub.setStyleSheet("font-size: 11px; color: #565f89; margin-left: 4px;")
 
-        # 1. CLI Tools Statusleiste
-        tools_group = QGroupBox("CLI-Tool Status (im System-PATH)")
-        self.tools_layout = QHBoxLayout(tools_group)
-        refresh_tools_btn = QPushButton("Neu prüfen")
+        title_box = QHBoxLayout()
+        title_box.addWidget(header_title)
+        title_box.addWidget(header_sub)
+        header_layout.addLayout(title_box)
+        header_layout.addStretch()
+
+        # Tools status row inside header
+        self.tools_layout = QHBoxLayout()
+        self.tools_layout.setSpacing(6)
+        refresh_tools_btn = QPushButton("🔄 Neu prüfen")
         refresh_tools_btn.setObjectName("toolButton")
         refresh_tools_btn.clicked.connect(self._refresh_tool_status)
         self.tools_layout.addWidget(refresh_tools_btn)
         self.tools_layout.addStretch()
-        layout.addWidget(tools_group)
+        header_layout.addLayout(self.tools_layout)
 
-        # 2. Basis-Metadaten
+        root_layout.addWidget(header_bar)
+
+        # ── 2. Haupt-Splitter (Links: Konfiguration, Rechts: Inspektor & Aktionen) ──
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.setChildrenCollapsible(False)
+
+        # =====================================================================
+        # LINKE SPALTE: Tabbed Configuration
+        # =====================================================================
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+
+        # ── TAB 1: 🚀 Projekt & Vorlage ──
+        tab1_scroll = QScrollArea()
+        tab1_scroll.setWidgetResizable(True)
+        tab1_scroll.setFrameShape(QScrollArea.NoFrame)
+        tab1_container = QWidget()
+        tab1_scroll.setWidget(tab1_container)
+        tab1_layout = QVBoxLayout(tab1_container)
+        tab1_layout.setContentsMargins(14, 14, 14, 14)
+        tab1_layout.setSpacing(14)
+
+        # Stammdaten Box
         meta_group = QGroupBox("Projekt-Stammdaten")
         meta_layout = QVBoxLayout(meta_group)
 
@@ -242,6 +277,7 @@ class MainWindow(QMainWindow):
         self.path_input = QLineEdit()
         self.path_input.setPlaceholderText("Verzeichnis, in dem der neue Projektordner angelegt wird...")
         self.path_input.textChanged.connect(self._save_path_setting)
+        self.path_input.textChanged.connect(lambda _: self._update_summary())
         browse_btn = QPushButton("Zielordner wählen...")
         browse_btn.clicked.connect(self._select_path)
         path_layout.addWidget(self.path_input)
@@ -254,10 +290,10 @@ class MainWindow(QMainWindow):
         meta_layout.addWidget(self.desc_input)
         meta_layout.addWidget(lbl_path)
         meta_layout.addLayout(path_layout)
-        layout.addWidget(meta_group)
+        tab1_layout.addWidget(meta_group)
 
-        # 3. Template & Template-Optionen
-        tpl_group = QGroupBox("Projekt-Vorlage & Vorlagenoptionen")
+        # Vorlage & Optionen Box
+        tpl_group = QGroupBox("Projekt-Vorlage & Optionen")
         tpl_layout = QVBoxLayout(tpl_group)
 
         tpl_header_layout = QHBoxLayout()
@@ -278,6 +314,7 @@ class MainWindow(QMainWindow):
 
         self.template_combo = QComboBox()
         self.template_combo.currentIndexChanged.connect(self._on_template_changed)
+
         self.template_desc_label = QLabel()
         self.template_desc_label.setObjectName("mutedLabel")
         self.template_desc_label.setWordWrap(True)
@@ -289,27 +326,95 @@ class MainWindow(QMainWindow):
         tpl_layout.addWidget(self.template_combo)
         tpl_layout.addWidget(self.template_desc_label)
         tpl_layout.addWidget(self.options_box)
-        layout.addWidget(tpl_group)
+        tab1_layout.addWidget(tpl_group)
+        tab1_layout.addStretch()
 
-        # 4. Git-Hooks Sektion
-        self.git_hooks_box = QGroupBox("Git-Hooks Integration")
+        self.tabs.addTab(tab1_scroll, "🚀 Projekt & Vorlage")
+
+        # ── TAB 2: 🛡️ Git-Hooks & Agenten ──
+        tab2_scroll = QScrollArea()
+        tab2_scroll.setWidgetResizable(True)
+        tab2_scroll.setFrameShape(QScrollArea.NoFrame)
+        tab2_container = QWidget()
+        tab2_scroll.setWidget(tab2_container)
+        tab2_layout = QVBoxLayout(tab2_container)
+        tab2_layout.setContentsMargins(14, 14, 14, 14)
+        tab2_layout.setSpacing(14)
+
+        # Git-Hooks Box
+        self.git_hooks_box = QGroupBox("Git-Hooks Integration (.git/hooks/)")
         hooks_box_layout = QVBoxLayout(self.git_hooks_box)
 
-        self.git_hooks_enable_cb = QCheckBox("Git-Hooks in das Projekt einrichten (.git/hooks/)")
+        hooks_top_row = QHBoxLayout()
+        self.git_hooks_enable_cb = QCheckBox("Git-Hooks in das Projekt einrichten")
         self.git_hooks_enable_cb.setChecked(True)
         self.git_hooks_enable_cb.setStyleSheet("font-weight: 600; color: #7aa2f7;")
-        hooks_box_layout.addWidget(self.git_hooks_enable_cb)
+        hooks_top_row.addWidget(self.git_hooks_enable_cb)
+        hooks_top_row.addStretch()
+
+        select_all_hooks_btn = QPushButton("Alle an")
+        select_all_hooks_btn.setObjectName("toolButton")
+        select_all_hooks_btn.clicked.connect(lambda: [cb.setChecked(True) for cb in self.hook_checkboxes.values()])
+        deselect_all_hooks_btn = QPushButton("Keine")
+        deselect_all_hooks_btn.setObjectName("toolButton")
+        deselect_all_hooks_btn.clicked.connect(lambda: [cb.setChecked(False) for cb in self.hook_checkboxes.values()])
+        hooks_top_row.addWidget(select_all_hooks_btn)
+        hooks_top_row.addWidget(deselect_all_hooks_btn)
+        hooks_box_layout.addLayout(hooks_top_row)
 
         self.git_hooks_container = QWidget()
         self.git_hooks_list_layout = QVBoxLayout(self.git_hooks_container)
-        self.git_hooks_list_layout.setContentsMargins(16, 4, 4, 4)
-        self.git_hooks_list_layout.setSpacing(6)
+        self.git_hooks_list_layout.setContentsMargins(12, 6, 6, 6)
+        self.git_hooks_list_layout.setSpacing(8)
         hooks_box_layout.addWidget(self.git_hooks_container)
         self.git_hooks_enable_cb.toggled.connect(self.git_hooks_container.setEnabled)
-        layout.addWidget(self.git_hooks_box)
+        self.git_hooks_enable_cb.toggled.connect(lambda _: self._update_summary())
+        tab2_layout.addWidget(self.git_hooks_box)
 
-        # 5. Erweiterte Konfiguration & Metadaten (Autor, Lizenz, Custom Scripts)
-        self.advanced_box = QGroupBox("Projekt-Metadaten & Benutzerdefinierte Skripte")
+        # Agenten Box
+        self.agent_box = QGroupBox("Agenten-Regeln & Skills (.agents/ & AGENTS.md)")
+        agent_box_layout = QVBoxLayout(self.agent_box)
+
+        self.agent_configs_enable_cb = QCheckBox("Agenten-Konfiguration für Coding-Assistenten generieren")
+        self.agent_configs_enable_cb.setChecked(True)
+        self.agent_configs_enable_cb.setStyleSheet("font-weight: 600; color: #7aa2f7;")
+        agent_box_layout.addWidget(self.agent_configs_enable_cb)
+
+        self.agent_container = QWidget()
+        self.agent_container_layout = QVBoxLayout(self.agent_container)
+        self.agent_container_layout.setContentsMargins(12, 4, 4, 4)
+
+        lbl_rules = QLabel("Vorgeschlagene Regeln (.agents/rules/):")
+        lbl_rules.setStyleSheet("font-weight: 600; color: #bb9af7;")
+        self.agent_container_layout.addWidget(lbl_rules)
+        self.agent_rules_layout = QVBoxLayout()
+        self.agent_container_layout.addLayout(self.agent_rules_layout)
+
+        lbl_skills = QLabel("Vorgeschlagene Skills (.agents/skills/):")
+        lbl_skills.setStyleSheet("font-weight: 600; color: #bb9af7; margin-top: 6px;")
+        self.agent_container_layout.addWidget(lbl_skills)
+        self.agent_skills_layout = QVBoxLayout()
+        self.agent_container_layout.addLayout(self.agent_skills_layout)
+
+        agent_box_layout.addWidget(self.agent_container)
+        self.agent_configs_enable_cb.toggled.connect(self.agent_container.setEnabled)
+        self.agent_configs_enable_cb.toggled.connect(lambda _: self._update_summary())
+        tab2_layout.addWidget(self.agent_box)
+        tab2_layout.addStretch()
+
+        self.tabs.addTab(tab2_scroll, "🛡️ Git-Hooks & Agenten")
+
+        # ── TAB 3: ⚙️ Metadaten & Skripte ──
+        tab3_scroll = QScrollArea()
+        tab3_scroll.setWidgetResizable(True)
+        tab3_scroll.setFrameShape(QScrollArea.NoFrame)
+        tab3_container = QWidget()
+        tab3_scroll.setWidget(tab3_container)
+        tab3_layout = QVBoxLayout(tab3_container)
+        tab3_layout.setContentsMargins(14, 14, 14, 14)
+        tab3_layout.setSpacing(14)
+
+        self.advanced_box = QGroupBox("Projekt-Metadaten")
         adv_layout = QVBoxLayout(self.advanced_box)
 
         author_row = QHBoxLayout()
@@ -338,10 +443,10 @@ class MainWindow(QMainWindow):
         author_row.addLayout(vbox_email)
         author_row.addLayout(vbox_license)
         adv_layout.addLayout(author_row)
+        tab3_layout.addWidget(self.advanced_box)
 
-        lbl_scripts = QLabel("Zusätzliche Projekt-Skripte (z. B. in pyproject.toml oder package.json):")
-        lbl_scripts.setObjectName("formLabel")
-        adv_layout.addWidget(lbl_scripts)
+        scripts_box = QGroupBox("Benutzerdefinierte Skripte (pyproject.toml / package.json)")
+        scripts_layout = QVBoxLayout(scripts_box)
 
         script_input_row = QHBoxLayout()
         self.script_name_input = QLineEdit()
@@ -359,7 +464,7 @@ class MainWindow(QMainWindow):
         script_input_row.addWidget(self.script_cmd_input, 2)
         script_input_row.addWidget(add_script_btn)
         script_input_row.addWidget(remove_script_btn)
-        adv_layout.addLayout(script_input_row)
+        scripts_layout.addLayout(script_input_row)
 
         self.scripts_table = QTableWidget(0, 2)
         self.scripts_table.setHorizontalHeaderLabels(["Name", "Befehl"])
@@ -367,40 +472,53 @@ class MainWindow(QMainWindow):
         self.scripts_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.scripts_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.scripts_table.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.scripts_table.setMaximumHeight(120)
-        adv_layout.addWidget(self.scripts_table)
-        layout.addWidget(self.advanced_box)
+        self.scripts_table.setMinimumHeight(140)
+        scripts_layout.addWidget(self.scripts_table)
+        tab3_layout.addWidget(scripts_box)
+        tab3_layout.addStretch()
 
-        # 6. Agenten-Regeln & Skills Sektion
-        self.agent_box = QGroupBox("Agenten-Regeln & Skills (.agents/ & AGENTS.md)")
-        agent_box_layout = QVBoxLayout(self.agent_box)
+        self.tabs.addTab(tab3_scroll, "⚙️ Metadaten & Skripte")
 
-        self.agent_configs_enable_cb = QCheckBox("Agenten-Konfiguration für Coding-Assistenten generieren")
-        self.agent_configs_enable_cb.setChecked(True)
-        self.agent_configs_enable_cb.setStyleSheet("font-weight: 600; color: #7aa2f7;")
-        agent_box_layout.addWidget(self.agent_configs_enable_cb)
+        splitter.addWidget(self.tabs)
 
-        self.agent_container = QWidget()
-        self.agent_container_layout = QVBoxLayout(self.agent_container)
-        self.agent_container_layout.setContentsMargins(16, 4, 4, 4)
+        # =====================================================================
+        # RECHTE SPALTE: Inspektor, Aktionen & Ausführungsprotokoll
+        # =====================================================================
+        right_panel = QWidget()
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(14, 14, 14, 14)
+        right_layout.setSpacing(12)
 
-        lbl_rules = QLabel("Vorgeschlagene Regeln (.agents/rules/):")
-        lbl_rules.setStyleSheet("font-weight: 600; color: #bb9af7;")
-        self.agent_container_layout.addWidget(lbl_rules)
-        self.agent_rules_layout = QVBoxLayout()
-        self.agent_container_layout.addLayout(self.agent_rules_layout)
+        # ── Live-Übersichtskarte ──
+        self.summary_card = QWidget()
+        self.summary_card.setObjectName("summaryCard")
+        summary_layout = QVBoxLayout(self.summary_card)
+        summary_layout.setContentsMargins(14, 12, 14, 12)
+        summary_layout.setSpacing(6)
 
-        lbl_skills = QLabel("Vorgeschlagene Skills (.agents/skills/):")
-        lbl_skills.setStyleSheet("font-weight: 600; color: #bb9af7; margin-top: 6px;")
-        self.agent_container_layout.addWidget(lbl_skills)
-        self.agent_skills_layout = QVBoxLayout()
-        self.agent_container_layout.addLayout(self.agent_skills_layout)
+        summary_title = QLabel("📊 Konfigurations-Übersicht")
+        summary_title.setStyleSheet("font-weight: 700; color: #7aa2f7; font-size: 13px;")
+        summary_layout.addWidget(summary_title)
 
-        agent_box_layout.addWidget(self.agent_container)
-        self.agent_configs_enable_cb.toggled.connect(self.agent_container.setEnabled)
-        layout.addWidget(self.agent_box)
+        self.summary_name_label = QLabel("<b>Projekt:</b> <i>Noch kein Name</i>")
+        self.summary_template_label = QLabel("<b>Vorlage:</b> –")
+        self.summary_path_label = QLabel("<b>Ziel:</b> –")
+        self.summary_path_label.setWordWrap(True)
+        self.summary_path_label.setObjectName("mutedLabel")
+        self.summary_features_label = QLabel("<b>Module:</b> Git-Hooks aktiv • Agent-Configs aktiv")
+        self.summary_features_label.setStyleSheet("color: #73daca; font-size: 12px;")
 
-        # 7. Buttons & Log
+        summary_layout.addWidget(self.summary_name_label)
+        summary_layout.addWidget(self.summary_template_label)
+        summary_layout.addWidget(self.summary_path_label)
+        summary_layout.addWidget(self.summary_features_label)
+        right_layout.addWidget(self.summary_card)
+
+        # ── Aktionsleiste ──
+        action_box = QGroupBox("Aktionen")
+        action_layout = QVBoxLayout(action_box)
+        action_layout.setSpacing(8)
+
         btn_row = QHBoxLayout()
         self.run_btn = QPushButton("▶  Projekt initialisieren")
         self.run_btn.setObjectName("primaryButton")
@@ -415,56 +533,123 @@ class MainWindow(QMainWindow):
         self.cancel_btn.clicked.connect(self._cancel_generation)
         self.cancel_btn.setVisible(False)
 
-        btn_row.addWidget(self.run_btn)
-        btn_row.addWidget(self.preview_btn)
-        btn_row.addWidget(self.cancel_btn)
-        btn_row.addStretch()
+        btn_row.addWidget(self.run_btn, 2)
+        btn_row.addWidget(self.preview_btn, 1)
+        btn_row.addWidget(self.cancel_btn, 1)
+        action_layout.addLayout(btn_row)
 
-        # Launcher Row (Aktionen nach erfolgreicher Erstellung)
+        # Launcher Row
         self.launcher_widget = QWidget()
         launcher_layout = QHBoxLayout(self.launcher_widget)
-        launcher_layout.setContentsMargins(0, 2, 0, 2)
-        lbl_launch = QLabel("<b>Projekt öffnen:</b>")
-        lbl_launch.setObjectName("formLabel")
-        launcher_layout.addWidget(lbl_launch)
+        launcher_layout.setContentsMargins(0, 4, 0, 0)
+        launcher_layout.setSpacing(6)
 
-        self.open_btn = QPushButton("📂  Explorer")
+        self.open_btn = QPushButton("📂 Explorer")
         self.open_btn.setObjectName("successButton")
         self.open_btn.clicked.connect(self._open_in_explorer)
         launcher_layout.addWidget(self.open_btn)
 
-        self.vscode_btn = QPushButton("💻  VS Code")
+        self.vscode_btn = QPushButton("💻 VS Code")
         self.vscode_btn.clicked.connect(self._open_in_vscode)
         launcher_layout.addWidget(self.vscode_btn)
 
-        self.cursor_btn = QPushButton("⚡  Cursor")
+        self.cursor_btn = QPushButton("⚡ Cursor")
         self.cursor_btn.clicked.connect(self._open_in_cursor)
         launcher_layout.addWidget(self.cursor_btn)
 
-        self.term_btn = QPushButton("🖥  Terminal")
+        self.term_btn = QPushButton("🖥 Terminal")
         self.term_btn.clicked.connect(self._open_in_terminal)
         launcher_layout.addWidget(self.term_btn)
-        launcher_layout.addStretch()
         self.launcher_widget.setVisible(False)
+        action_layout.addWidget(self.launcher_widget)
 
-        lbl_log = QLabel("Status / Ausführungsprotokoll:")
+        right_layout.addWidget(action_box)
+
+        # ── Ausführungsprotokoll (Log) ──
+        log_header = QHBoxLayout()
+        lbl_log = QLabel("Ausführungsprotokoll:")
         lbl_log.setObjectName("formLabel")
+        clear_log_btn = QPushButton("🧹 Leeren")
+        clear_log_btn.setObjectName("toolButton")
+        clear_log_btn.clicked.connect(lambda: self.log_view.clear())
+        log_header.addWidget(lbl_log)
+        log_header.addStretch()
+        log_header.addWidget(clear_log_btn)
+        right_layout.addLayout(log_header)
+
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setMinimumHeight(160)
+        right_layout.addWidget(self.log_view, 1)
 
-        layout.addLayout(btn_row)
-        layout.addWidget(self.launcher_widget)
-        layout.addWidget(lbl_log)
-        layout.addWidget(self.log_view)
+        splitter.addWidget(right_panel)
+
+        # Splitter-Größenverteilung: 58% links, 42% rechts
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 2)
+        splitter.setSizes([580, 440])
+
+        root_layout.addWidget(splitter, 1)
 
         # Statusleiste
         self.statusBar().showMessage("Bereit")
+        self._update_summary()
+
+    # ── Live-Übersicht (Inspector) ──────────────────────────────────────────
+
+    def _update_summary(self):
+        """Updates the live summary card in the right pane with current configuration."""
+        if not hasattr(self, "summary_name_label"):
+            return
+
+        name = self.name_input.text().strip()
+        if name:
+            self.summary_name_label.setText(
+                f"<b>Projekt:</b> <span style='color: #7aa2f7; font-weight: bold;'>{name}</span>"
+            )
+        else:
+            self.summary_name_label.setText(
+                "<b>Projekt:</b> <i><span style='color: #565f89;'>Noch kein Name</span></i>"
+            )
+
+        template_id = self.template_combo.currentData() or ""
+        template_meta = self.template_manager.templates.get(template_id, {})
+        tpl_name = template_meta.get("name", template_id or "–")
+        lang = template_meta.get("language", "Universal")
+        self.summary_template_label.setText(
+            f"<b>Vorlage:</b> <span style='color: #c0caf5;'>{tpl_name}</span> "
+            f"<span style='color: #73daca;'>({lang})</span>"
+        )
+
+        base_path = self.path_input.text().strip()
+        if base_path:
+            target_path = Path(base_path) / (name if name else "")
+            self.summary_path_label.setText(
+                f"<b>Ziel:</b> <span style='color: #9aa5ce;'>{target_path}</span>"
+            )
+        else:
+            self.summary_path_label.setText("<b>Ziel:</b> –")
+
+        features = []
+        if hasattr(self, "git_hooks_enable_cb") and self.git_hooks_enable_cb.isChecked():
+            hooks_count = sum(1 for cb in self.hook_checkboxes.values() if cb.isChecked())
+            features.append(f"🛡️ {hooks_count} Hooks")
+        else:
+            features.append("🛡️ Hooks inaktiv")
+
+        if hasattr(self, "agent_configs_enable_cb") and self.agent_configs_enable_cb.isChecked():
+            rules_count = sum(1 for cb in self.agent_rule_checkboxes.values() if cb.isChecked())
+            skills_count = sum(1 for cb in self.agent_skill_checkboxes.values() if cb.isChecked())
+            features.append(f"🤖 {rules_count} Regeln / {skills_count} Skills")
+        else:
+            features.append("🤖 Agents inaktiv")
+
+        self.summary_features_label.setText(" • ".join(features))
 
     # ── Eingabevalidierung ──────────────────────────────────────────────────
 
     def _validate_name(self, text: str) -> bool:
         """Validates the project name against naming constraints."""
+        self._update_summary()
         text = text.strip()
         if not text:
             self.name_error_label.setVisible(False)
@@ -526,8 +711,10 @@ class MainWindow(QMainWindow):
             cb = QCheckBox(f"{hook['name']} ({hook_id})")
             cb.setToolTip(hook["description"])
             cb.setChecked(hook.get("default", True))
+            cb.toggled.connect(lambda _: self._update_summary())
             self.git_hooks_list_layout.addWidget(cb)
             self.hook_checkboxes[hook_id] = cb
+        self._update_summary()
 
     # ── Agenten-Regeln & Skills ─────────────────────────────────────────────
 
@@ -560,6 +747,7 @@ class MainWindow(QMainWindow):
             cb = QCheckBox(f"{rule.get('name')}  –  {rule.get('description')}")
             cb.setToolTip(rule.get("description"))
             cb.setChecked(r_id in recommended_rules)
+            cb.toggled.connect(lambda _: self._update_summary())
             self.agent_rules_layout.addWidget(cb)
             self.agent_rule_checkboxes[r_id] = cb
 
@@ -569,8 +757,10 @@ class MainWindow(QMainWindow):
             cb = QCheckBox(f"{skill.get('name')}  –  {skill.get('description')}")
             cb.setToolTip(skill.get("description"))
             cb.setChecked(s_id in recommended_skills)
+            cb.toggled.connect(lambda _: self._update_summary())
             self.agent_skills_layout.addWidget(cb)
             self.agent_skill_checkboxes[s_id] = cb
+        self._update_summary()
 
     # ── Benutzerdefinierte Skripte ──────────────────────────────────────────
 

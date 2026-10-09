@@ -393,4 +393,50 @@ QDialog {
     background-color: #1a1b26;
     color: #c0caf5;
 }
+
+/* Tab Widget & Tab Bar */
+QTabWidget::pane {
+    border: 1px solid #2f354d;
+    background-color: #1a1b26;
+    border-radius: 8px;
+    padding: 4px;
+    top: -1px;
+}
+
+QTabBar::tab {
+    background-color: #16161e;
+    color: #a9b1d6;
+    padding: 9px 18px;
+    margin-right: 4px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border: 1px solid #2f354d;
+    border-bottom: none;
+    font-weight: 600;
+}
+
+QTabBar::tab:selected {
+    background-color: #1a1b26;
+    color: #7aa2f7;
+    border-color: #2f354d;
+    border-bottom: 2px solid #7aa2f7;
+}
+
+QTabBar::tab:hover:!selected {
+    background-color: #24283b;
+    color: #c0caf5;
+}
+
+/* Custom Containers */
+QWidget#summaryCard {
+    background-color: #202334;
+    border: 1px solid #2f354d;
+    border-radius: 8px;
+    padding: 12px;
+}
+
+QWidget#headerBar {
+    background-color: #16161e;
+    border-bottom: 1px solid #292e42;
+}
 """

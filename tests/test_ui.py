@@ -127,6 +127,24 @@ class TestMainWindow(unittest.TestCase):
                     self.assertTrue(res)
                     self.assertEqual(context["framework"], "pyside6")
 
+    def test_tab_layout_and_live_inspector(self):
+        """Verifies the new 2-pane tabbed layout and dynamic live summary card."""
+        self.assertEqual(self.window.tabs.count(), 3)
+        self.assertIn("Projekt & Vorlage", self.window.tabs.tabText(0))
+        self.assertIn("Git-Hooks & Agenten", self.window.tabs.tabText(1))
+        self.assertIn("Metadaten & Skripte", self.window.tabs.tabText(2))
+
+        # Check live inspector components
+        self.assertIsNotNone(self.window.summary_card)
+        self.window.name_input.setText("quantum-leap")
+        self.assertIn("quantum-leap", self.window.summary_name_label.text())
+        self.assertIn("Hooks", self.window.summary_features_label.text())
+        self.assertIn("Regeln", self.window.summary_features_label.text())
+
+        # Check path update in summary
+        self.window.path_input.setText("C:/projects")
+        self.assertIn("quantum-leap", self.window.summary_path_label.text())
+
 
 if __name__ == "__main__":
     unittest.main()
