@@ -3,6 +3,14 @@ name = "{{ project_slug }}"
 version = "0.1.0"
 description = "{{ description }}"
 requires-python = ">=3.11"
+{% if author %}
+authors = [
+    { name = "{{ author }}"{% if author_email %}, email = "{{ author_email }}"{% endif %} }
+]
+{% endif %}
+{% if license %}
+license = { text = "{{ license }}" }
+{% endif %}
 dependencies = [
 {% if framework == "pyside6" %}
     "pyside6",
@@ -17,6 +25,11 @@ dependencies = [
 
 [project.scripts]
 {{ project_slug }} = "{{ project_slug }}:main"
+{% if custom_scripts %}
+{% for s_name, s_cmd in custom_scripts.items() %}
+{{ s_name }} = "{{ s_cmd }}"
+{% endfor %}
+{% endif %}
 
 [build-system]
 requires = ["uv_build"]

@@ -3,6 +3,12 @@ name = "{{ project_slug }}"
 version = "0.1.0"
 edition = "2021"
 description = "{{ description }}"
+{% if author %}
+authors = ["{{ author }}{% if author_email %} <{{ author_email }}>{% endif %}"]
+{% endif %}
+{% if license %}
+license = "{{ license }}"
+{% endif %}
 
 [dependencies]
 clap = { version = "4.5", features = ["derive"] }

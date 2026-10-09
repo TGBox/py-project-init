@@ -1,0 +1,8 @@
+pre-commit:
+  name: "Pre-Commit: SemVer-Bump"
+  description: "Fragt bei Commits nach SemVer-Änderung (Patch/Minor/Major) und aktualisiert pyproject.toml bzw. package.json."
+  default: true
+post-commit:
+  name: "Post-Commit: Changelog-Generator"
+  description: "Erstellt und aktualisiert die CHANGELOG.md automatisch anhand der Git-Historie und Versionen."
+  default: true

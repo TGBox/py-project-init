@@ -39,5 +39,8 @@ file_conditions:
   - pattern: ".vscode/"
     when: "vscode"
 hooks:
+  pre_init:
+    - ["uv", "init"]
+    - ["uv", "venv"]
   post_create:
     - ["uv", "sync"]

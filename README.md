@@ -6,21 +6,30 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
 
 ## 🚀 Funktionen
 
-- **Moderne Qt-Oberfläche (Dark Mode):** Elegantes dunkles Design mit Statusanzeigen, Echtzeit-Validierung und interaktiven Hilfetexten.
+- **Moderne Qt-Oberfläche (Dark Mode):** Elegantes dunkles Design mit Statusanzeigen, Echtzeit-Validierung und interaktiven Hilfetexten in einer responsiven Scroll-Ansicht.
 - **Vollbild- & Fenstermodus:** Nahtloses Umschalten zwischen Standard- und Vollbildansicht jederzeit per Menü (**Ansicht → Vollbildmodus**) oder Taste `F11`.
 - **System-Tool-Prüfung:** Live-Erkennung verfügbarer CLI-Werkzeuge (`git`, `uv`, `cargo`, `npm`) im System-PATH.
 - **Echtzeit-Validierung:** Sofortige Prüfung des Projektnamens auf Konventionen (nur Buchstaben, Ziffern, `-` und `_`, muss mit einem Buchstaben beginnen).
-- **Dynamische Vorlagen-Optionen:**
-  - Checkboxen (z. B. GitHub Actions CI, Dockerfile-Support)
-  - Dropdown-Auswahl mit Tooltips und verständlichen Erklärungen für fundierte Architekturentscheidungen (z. B. GUI-Framework-Auswahl).
+- **Optimierte Pipeline (`uv init` → `uv venv` → `git init`):**
+  - Deklarative `pre_init`-Hooks in `template.yaml` (z. B. automatisches `uv init` und `uv venv`).
+  - Beibehaltung der durch `uv init` erzeugten `.gitignore` kombiniert mit Template-spezifischen Ignore-Einträgen.
+  - Sauberes Überschreiben von Dummy-Dateien durch die Jinja2-Vorlagen.
+- **Modulare Git-Hooks Integration:**
+  - Feingranulare Auswahl in der UI für verfügbare Hooks aus dem Ordner `hooks/`.
+  - **Pre-Commit (SemVer-Bump):** Fragt interaktiv nach Version-Bumps (Patch/Minor/Major) und aktualisiert `pyproject.toml` bzw. `package.json`.
+  - **Post-Commit (Changelog-Generator):** Erstellt und aktualisiert die `CHANGELOG.md` linter-konform anhand der Git-Historie.
+  - Automatischer initialer Commit während der Generierung via `--no-verify`.
+- **Agenten-Regeln & Skills (.agents/):**
+  - Modulare Bibliothek unter `assets/agent_configs/` für Coding-Assistenten.
+  - Automatische, sprach- und vorlagenspezifische Empfehlungen für Regeln und Skills.
+  - Individuelle An- und Abwahl in der Benutzeroberfläche.
+  - Generiert `.agents/rules/`, `.agents/skills/` sowie eine strukturierte `AGENTS.md` im Projektstamm.
+- **Erweiterte Metadaten & Benutzerdefinierte Skripte:**
+  - Autorenangaben (Name, E-Mail), Lizenzauswahl (MIT, Apache-2.0, GPL-3.0, etc.).
+  - Konfigurierbare Skript-Tabelle (z. B. `format = ruff format .`), die direkt in `pyproject.toml` oder `package.json` geschrieben wird.
+  - Dauerhafte Speicherung über `QSettings`.
 - **Asynchrone Generierung mit Abbruch:** Hintergrund-Ausführung im separaten Thread; kann jederzeit über den **✖ Abbrechen**-Button sicher gestoppt werden.
-- **Post-Hooks & Git-Setup:** Automatische Ausführung von Initialisierungs-Hooks (z. B. `uv sync`, `cargo check`) sowie automatischer initialer Git-Commit.
-- **Direktzugriff:** Nach erfolgreicher Erstellung kann der Zielordner mit einem Klick im System-Dateimanager (Windows Explorer, macOS Finder, Linux Dateimanager) geöffnet werden.
-- **Erweiterbare Vorlagenverwaltung:**
-  - Schnell-Reload (`Strg+R` oder **🔄 Neu laden**) ohne Anwendungsneustart
-  - Standard-Vorlagenordner direkt per Button im Explorer öffnen
-  - Eigene, benutzerdefinierte Vorlagenordner hinzufügen und dauerhaft registrieren
-- **Persistente Einstellungen (`QSettings`):** Letzter Speicherpfad, gewählte Vorlage sowie Fensterposition und -größe bleiben zwischen Sitzungen erhalten.
+- **Direktzugriff:** Nach erfolgreicher Erstellung kann der Zielordner mit einem Klick im System-Dateimanager geöffnet werden.
 
 ---
 
@@ -28,9 +37,9 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
 
 | Vorlage | Sprache / Ökosystem | Enthaltene Features & Optionen |
 | :--- | :--- | :--- |
-| **Python CLI** | Python (uv / pyproject.toml) | Modulares Paket, Einstiegspunkte, Tests mit pytest, optionale GitHub Actions CI & Dockerfile |
-| **Python FastAPI** | Python (FastAPI, uv) | REST API mit Pydantic, Healthchecks, optionale GitHub Actions CI & Dockerfile |
-| **Python GUI** | Python (Desktop GUI) | Auswahl des GUI-Frameworks (**PySide6**, **PyQt6**, **Tkinter**, **wxPython**, **Kivy**) mit vergleichender Entscheidungshilfe |
+| **Python CLI** | Python (uv / pyproject.toml) | `uv init` + `uv venv` Pipeline, modulares Paket, Tests mit pytest, Ruff, optionale GitHub Actions CI & Dockerfile |
+| **Python FastAPI** | Python (FastAPI, uv) | `uv init` + `uv venv` Pipeline, REST API mit Pydantic, Healthchecks, optionale GitHub Actions CI & Dockerfile |
+| **Python GUI** | Python (Desktop GUI) | `uv init` + `uv venv` Pipeline, GUI-Framework (**PySide6**, **PyQt6**, **Tkinter**, **wxPython**, **Kivy**) mit vergleichender Entscheidungshilfe |
 | **Rust CLI** | Rust (Cargo) | Projektstruktur mit Cargo.toml, Tests, optionaler GitHub Actions Workflow |
 | **Rust GUI** | Rust (Desktop GUI) | Auswahl des GUI-Frameworks (**egui / eframe**, **Iced**, **Tauri**, **Slint**, **GTK4**) mit detaillierten Tooltips |
 | **Node/TypeScript** | TypeScript (npm / Node.js) | Modernes TS-Setup, Vitest, optionale GitHub Actions CI & Dockerfile |
@@ -107,9 +116,6 @@ options:
       - value: pyside6
         label: PySide6 (Qt)
         description: Offizielles Qt-Binding für moderne Desktop-Anwendungen.
-      - value: tkinter
-        label: Tkinter
-        description: Einfach, im Standardumfang von Python enthalten.
   - id: github_actions
     label: GitHub Actions CI hinzufügen
     type: bool
@@ -120,6 +126,9 @@ file_conditions:
     when: "github_actions"
 
 hooks:
+  pre_init:
+    - ["uv", "init"]
+    - ["uv", "venv"]
   post_create:
     - ["uv", "sync"]
 ```
@@ -132,7 +141,7 @@ hooks:
 | :--- | :--- |
 | **F11** | Vollbildmodus umschalten (Vollbild ↔ Fenstermodus) |
 | **Strg + O** | Basis-Zielordner auswählen |
-| **Strg + R** | Vorlagen neu einlesen |
+| **Strg + R** | Vorlagen & Assets neu einlesen |
 | **Strg + L** | Protokollfenster (Log) leeren |
 | **Strg + Q** | Anwendung beenden |
 

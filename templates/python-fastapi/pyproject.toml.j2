@@ -4,12 +4,27 @@ version = "0.1.0"
 description = "{{ description }}"
 readme = "README.md"
 requires-python = ">=3.12"
+{% if author %}
+authors = [
+    { name = "{{ author }}"{% if author_email %}, email = "{{ author_email }}"{% endif %} }
+]
+{% endif %}
+{% if license %}
+license = { text = "{{ license }}" }
+{% endif %}
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.31.0",
     "pydantic>=2.9.0",
     "pydantic-settings>=2.5.0",
 ]
+
+{% if custom_scripts %}
+[project.scripts]
+{% for s_name, s_cmd in custom_scripts.items() %}
+{{ s_name }} = "{{ s_cmd }}"
+{% endfor %}
+{% endif %}
 
 [dependency-groups]
 dev = [

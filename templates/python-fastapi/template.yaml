@@ -16,5 +16,8 @@ file_conditions:
   - pattern: "docker-compose"
     when: "docker"
 hooks:
+  pre_init:
+    - ["uv", "init"]
+    - ["uv", "venv"]
   post_create:
     - ["uv", "sync"]

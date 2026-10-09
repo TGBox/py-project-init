@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -e
+
+# Abbruch, wenn der Aufruf durch den post-commit Hook (Changelog-Amend) ausgelöst wurde
+if [ "$GIT_CHANGELOG_RUNNING" = "1" ]; then
+  exit 0
+fi
+
+# Pre-Commit Hook um die SemVer Änderung abzufragen, und anschließend automatisch die Versionsnummer in der jeweiligen Config Datei anzupassen.
+
+# Eingabe über Terminal (TTY) erzwingen
+exec < /dev/tty
+
+# Aktuelle Version vorab ermitteln
+CURRENT_VERSION=""
+if [ -f "pyproject.toml" ]; then
+  CURRENT_VERSION=$(python3 -c "
+import re
+try:
+    with open('pyproject.toml', 'r', encoding='utf-8') as f:
+        m = re.search(r'version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"', f.read())
+        if m:
+            print(f'{m.group(1)}.{m.group(2)}.{m.group(3)}')
+except Exception:
+    pass
+")
+elif [ -f "package.json" ]; then
+  CURRENT_VERSION=$(python3 -c "
+import json
+try:
+    with open('package.json', 'r', encoding='utf-8') as f:
+        print(json.load(f).get('version', ''))
+except Exception:
+    pass
+")
+fi
+
+echo "----------------------------------------"
+if [ -n "$CURRENT_VERSION" ]; then
+  echo "Aktuelle Version: v$CURRENT_VERSION"
+  echo "----------------------------------------"
+fi
+echo "SemVer Bump auswählen:"
+echo "1) Patch"
+echo "2) Minor"
+echo "3) Major"
+echo "s) Überspringen (keine Änderung)"
+echo "----------------------------------------"
+read -r -p "Auswahl [1/2/3/s]: " choice
+
+BUMP=""
+case "$choice" in
+  1) BUMP="patch" ;;
+  2) BUMP="minor" ;;
+  3) BUMP="major" ;;
+  s|S|"") echo "Version unverändert gelassen."; exit 0 ;;
+  *) echo "Ungültige Auswahl, Commit abgebrochen."; exit 1 ;;
+esac
+
+# 1. Python-Projekt (pyproject.toml & uv.lock)
+if [ -f "pyproject.toml" ]; then
+  python3 -c "
+import re, sys
+
+part = '$BUMP'
+file = 'pyproject.toml'
+
+with open(file, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+m = re.search(r'version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"', content)
+if not m:
+    sys.exit('Keine SemVer-Version in pyproject.toml gefunden.')
+
+major, minor, patch = map(int, m.groups())
+if part == 'major':
+    major += 1
+    minor = 0
+    patch = 0
+elif part == 'minor':
+    minor += 1
+    patch = 0
+elif part == 'patch':
+    patch += 1
+
+new_ver = f'{major}.{minor}.{patch}'
+content = re.sub(r'version\s*=\s*\"\d+\.\d+\.\d+\"', f'version = \"{new_ver}\"', content, count=1)
+
+with open(file, 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print(f'pyproject.toml: {m.group(1)}.{m.group(2)}.{m.group(3)} -> {new_ver}')
+"
+  git add pyproject.toml
+
+  if [ -f "uv.lock" ]; then
+    uv lock
+    git add uv.lock
+    echo "uv.lock aktualisiert und gestaged."
+  fi
+fi
+
+# 2. Node-Projekt (package.json)
+if [ -f "package.json" ]; then
+  npm version "$BUMP" --no-git-tag-version
+  git add package.json
+  
+  if [ -f "package-lock.json" ]; then
+    git add package-lock.json
+  fi
+fi
+
+echo "Versionsdateien erfolgreich aktualisiert."

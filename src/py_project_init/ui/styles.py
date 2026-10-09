@@ -335,4 +335,22 @@ QStatusBar {
     color: #787c99;
     border-top: 1px solid #292e42;
 }
+
+/* Tables */
+QTableWidget {
+    background-color: #1a1b26;
+    color: #c0caf5;
+    gridline-color: #292e42;
+    border: 1px solid #3b4261;
+    border-radius: 6px;
+    selection-background-color: #3d59a1;
+}
+
+QHeaderView::section {
+    background-color: #1f2335;
+    color: #7aa2f7;
+    padding: 4px 8px;
+    border: 1px solid #292e42;
+    font-weight: 600;
+}
 """

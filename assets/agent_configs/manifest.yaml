@@ -1,0 +1,59 @@
+rules:
+  - id: "general_guidelines"
+    name: "Allgemeine Architektur & Code-Standards"
+    description: "Grundregeln: Saubere Modularisierung, lesbarer Code, englische Variablennamen/Kommentare, deutsche Nutzeroberflächentexte."
+    file: "rules/general_guidelines.md"
+    languages: ["all"]
+    default: true
+
+  - id: "python_standards"
+    name: "Python & uv Best Practices"
+    description: "Moderne Python-Standards: Paketmanagement mit uv, Typ-Annotationen, Ruff Linter/Formatter und Pytest."
+    file: "rules/python_standards.md"
+    languages: ["Python"]
+    default: true
+
+  - id: "fastapi_best_practices"
+    name: "FastAPI & Async Patterns"
+    description: "Best Practices für FastAPI: Asynchrone Handler, Pydantic-Validierung, strukturierte Exceptions und Dependency Injection."
+    file: "rules/fastapi_best_practices.md"
+    languages: ["Python"]
+    templates: ["python-fastapi"]
+    default: true
+
+  - id: "pyside6_gui_conventions"
+    name: "Desktop GUI & PySide6 Richtlinien"
+    description: "Qt/PySide6 Konventionen: Trennung von Logik und UI, QThread/Worker für Hintergrundaufgaben, Fenster- und Vollbildmodus."
+    file: "rules/pyside6_gui_conventions.md"
+    languages: ["Python"]
+    templates: ["python-gui"]
+    default: true
+
+  - id: "rust_standards"
+    name: "Rust & Cargo Best Practices"
+    description: "Idiomatisches Rust: Clippy-Konformität, sichere Fehlerbehandlung (thiserror/anyhow) und speichereffiziente Datenstrukturen."
+    file: "rules/rust_standards.md"
+    languages: ["Rust"]
+    default: true
+
+  - id: "typescript_standards"
+    name: "TypeScript & Node.js Standards"
+    description: "Strikte Typisierung, saubere ESM-Module, Vitest Test-Setup und Linter-Konformität."
+    file: "rules/typescript_standards.md"
+    languages: ["TypeScript"]
+    default: true
+
+skills:
+  - id: "code-review"
+    name: "Code-Review Skill"
+    description: "Strukturierte Überprüfung von Code-Änderungen hinsichtlich Korrektheit, Lesbarkeit, Sicherheit und Performance."
+    folder: "skills/code-review"
+    languages: ["all"]
+    default: true
+
+  - id: "test-runner"
+    name: "Test-Runner & Diagnose Skill"
+    description: "Automatisiertes Ausführen und Analysieren von Tests mit den passenden Werkzeugen des Projekts (pytest, cargo test, vitest)."
+    folder: "skills/test-runner"
+    languages: ["all"]
+    default: true

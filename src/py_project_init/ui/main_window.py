@@ -1,13 +1,15 @@
+import json
 import re
 import sys
 import shutil
 from pathlib import Path
-from PySide6.QtCore import QThread, Signal, QSettings, QByteArray, QUrl
+from PySide6.QtCore import QThread, Signal, QSettings, QByteArray, QUrl, Qt
 from PySide6.QtGui import QAction, QKeySequence, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QComboBox, QCheckBox, QPushButton, QTextEdit,
-    QFileDialog, QLabel, QGroupBox, QMessageBox
+    QFileDialog, QLabel, QGroupBox, QMessageBox, QScrollArea,
+    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 from py_project_init.core.generator import TemplateManager
 from py_project_init.ui.styles import DARK_THEME
@@ -56,7 +58,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Project Scaffolder - Projekt-Initialisierung")
-        self.resize(760, 800)
+        self.resize(840, 880)
 
         # Persistent settings
         self.settings = QSettings("DaniBani", "PyProjectInit")
@@ -73,6 +75,9 @@ class MainWindow(QMainWindow):
         self.tool_statuses: dict[str, bool] = {}
         self.option_checkboxes: dict[str, QCheckBox] = {}
         self.option_selects: dict[str, QComboBox] = {}
+        self.hook_checkboxes: dict[str, QCheckBox] = {}
+        self.agent_rule_checkboxes: dict[str, QCheckBox] = {}
+        self.agent_skill_checkboxes: dict[str, QCheckBox] = {}
         self._last_target_dir: str = ""
         self.worker: GenerateWorker | None = None
 
@@ -82,6 +87,8 @@ class MainWindow(QMainWindow):
         self._load_saved_settings()
         self._refresh_tool_status()
         self._populate_templates()
+        self._populate_git_hooks()
+        self._refresh_agent_configs()
 
     def _apply_theme(self):
         """Applies the modern dark stylesheet to the main window."""
@@ -118,6 +125,14 @@ class MainWindow(QMainWindow):
         open_tpl_folder_action = QAction("Standard-Vorlagenordner im Explorer öffnen", self)
         open_tpl_folder_action.triggered.connect(self._open_templates_dir)
         template_menu.addAction(open_tpl_folder_action)
+
+        open_hooks_folder_action = QAction("Git-Hooks-Ordner im Explorer öffnen", self)
+        open_hooks_folder_action.triggered.connect(self._open_hooks_dir)
+        template_menu.addAction(open_hooks_folder_action)
+
+        open_agents_folder_action = QAction("Agenten-Asset-Ordner im Explorer öffnen", self)
+        open_agents_folder_action.triggered.connect(self._open_agents_dir)
+        template_menu.addAction(open_agents_folder_action)
 
         add_custom_tpl_action = QAction("Benutzerdefinierten Vorlagen-Ordner hinzufügen...", self)
         add_custom_tpl_action.triggered.connect(self._add_custom_templates_dir)
@@ -161,11 +176,17 @@ class MainWindow(QMainWindow):
     # ── UI Aufbau ───────────────────────────────────────────────────────────
 
     def _init_ui(self):
-        central = QWidget()
-        self.setCentralWidget(central)
-        layout = QVBoxLayout(central)
-        layout.setSpacing(10)
-        layout.setContentsMargins(14, 14, 14, 14)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        self.setCentralWidget(scroll)
+
+        container = QWidget()
+        scroll.setWidget(container)
+
+        layout = QVBoxLayout(container)
+        layout.setSpacing(12)
+        layout.setContentsMargins(16, 16, 16, 16)
 
         # 1. CLI Tools Statusleiste
         tools_group = QGroupBox("CLI-Tool Status (im System-PATH)")
@@ -177,7 +198,10 @@ class MainWindow(QMainWindow):
         self.tools_layout.addStretch()
         layout.addWidget(tools_group)
 
-        # 2. Metadaten
+        # 2. Basis-Metadaten
+        meta_group = QGroupBox("Projekt-Stammdaten")
+        meta_layout = QVBoxLayout(meta_group)
+
         lbl_name = QLabel("Projektname:")
         lbl_name.setObjectName("formLabel")
         self.name_input = QLineEdit()
@@ -192,7 +216,6 @@ class MainWindow(QMainWindow):
         self.desc_input = QLineEdit()
         self.desc_input.setPlaceholderText("Kurze Beschreibung des Projekts")
 
-        # 3. Zielverzeichnis
         lbl_path = QLabel("Speicherort (Basisordner):")
         lbl_path.setObjectName("formLabel")
         path_layout = QHBoxLayout()
@@ -204,23 +227,32 @@ class MainWindow(QMainWindow):
         path_layout.addWidget(self.path_input)
         path_layout.addWidget(browse_btn)
 
-        # 4. Template & Beschreibung
-        lbl_tpl = QLabel("Projekt-Vorlage:")
-        lbl_tpl.setObjectName("formLabel")
+        meta_layout.addWidget(lbl_name)
+        meta_layout.addWidget(self.name_input)
+        meta_layout.addWidget(self.name_error_label)
+        meta_layout.addWidget(lbl_desc)
+        meta_layout.addWidget(self.desc_input)
+        meta_layout.addWidget(lbl_path)
+        meta_layout.addLayout(path_layout)
+        layout.addWidget(meta_group)
+
+        # 3. Template & Template-Optionen
+        tpl_group = QGroupBox("Projekt-Vorlage & Vorlagenoptionen")
+        tpl_layout = QVBoxLayout(tpl_group)
 
         tpl_header_layout = QHBoxLayout()
+        lbl_tpl = QLabel("Vorlage auswählen:")
+        lbl_tpl.setObjectName("formLabel")
         tpl_header_layout.addWidget(lbl_tpl)
         tpl_header_layout.addStretch()
 
         reload_tpl_btn = QPushButton("🔄 Neu laden")
         reload_tpl_btn.setObjectName("toolButton")
-        reload_tpl_btn.setToolTip("Vorlagen neu einlesen (z. B. nach Hinzufügen eigener Ordner)")
         reload_tpl_btn.clicked.connect(self._reload_templates)
         tpl_header_layout.addWidget(reload_tpl_btn)
 
         open_tpl_btn = QPushButton("📁 Vorlagen-Ordner")
         open_tpl_btn.setObjectName("toolButton")
-        open_tpl_btn.setToolTip("Vorlagen-Verzeichnis im System-Explorer öffnen")
         open_tpl_btn.clicked.connect(self._open_templates_dir)
         tpl_header_layout.addWidget(open_tpl_btn)
 
@@ -230,10 +262,125 @@ class MainWindow(QMainWindow):
         self.template_desc_label.setObjectName("mutedLabel")
         self.template_desc_label.setWordWrap(True)
 
-        self.options_box = QGroupBox("Zusatzoptionen")
+        self.options_box = QGroupBox("Vorlagenspezifische Zusatzoptionen")
         self.options_layout = QVBoxLayout(self.options_box)
 
-        # 5. Buttons & Log
+        tpl_layout.addLayout(tpl_header_layout)
+        tpl_layout.addWidget(self.template_combo)
+        tpl_layout.addWidget(self.template_desc_label)
+        tpl_layout.addWidget(self.options_box)
+        layout.addWidget(tpl_group)
+
+        # 4. Git-Hooks Sektion
+        self.git_hooks_box = QGroupBox("Git-Hooks Integration")
+        hooks_box_layout = QVBoxLayout(self.git_hooks_box)
+
+        self.git_hooks_enable_cb = QCheckBox("Git-Hooks in das Projekt einrichten (.git/hooks/)")
+        self.git_hooks_enable_cb.setChecked(True)
+        self.git_hooks_enable_cb.setStyleSheet("font-weight: 600; color: #7aa2f7;")
+        hooks_box_layout.addWidget(self.git_hooks_enable_cb)
+
+        self.git_hooks_container = QWidget()
+        self.git_hooks_list_layout = QVBoxLayout(self.git_hooks_container)
+        self.git_hooks_list_layout.setContentsMargins(16, 4, 4, 4)
+        self.git_hooks_list_layout.setSpacing(6)
+        hooks_box_layout.addWidget(self.git_hooks_container)
+        self.git_hooks_enable_cb.toggled.connect(self.git_hooks_container.setEnabled)
+        layout.addWidget(self.git_hooks_box)
+
+        # 5. Erweiterte Konfiguration & Metadaten (Autor, Lizenz, Custom Scripts)
+        self.advanced_box = QGroupBox("Projekt-Metadaten & Benutzerdefinierte Skripte")
+        adv_layout = QVBoxLayout(self.advanced_box)
+
+        author_row = QHBoxLayout()
+        vbox_author = QVBoxLayout()
+        vbox_author.addWidget(QLabel("Autor:"))
+        self.author_input = QLineEdit()
+        self.author_input.setPlaceholderText("z. B. Max Mustermann")
+        self.author_input.textChanged.connect(lambda t: self.settings.setValue("author_name", t.strip()))
+        vbox_author.addWidget(self.author_input)
+
+        vbox_email = QVBoxLayout()
+        vbox_email.addWidget(QLabel("E-Mail:"))
+        self.email_input = QLineEdit()
+        self.email_input.setPlaceholderText("z. B. max@example.com")
+        self.email_input.textChanged.connect(lambda t: self.settings.setValue("author_email", t.strip()))
+        vbox_email.addWidget(self.email_input)
+
+        vbox_license = QVBoxLayout()
+        vbox_license.addWidget(QLabel("Lizenz:"))
+        self.license_combo = QComboBox()
+        self.license_combo.addItems(["MIT", "Apache-2.0", "GPL-3.0", "BSD-3-Clause", "Proprietary", "Keine"])
+        self.license_combo.currentTextChanged.connect(lambda t: self.settings.setValue("license", t))
+        vbox_license.addWidget(self.license_combo)
+
+        author_row.addLayout(vbox_author)
+        author_row.addLayout(vbox_email)
+        author_row.addLayout(vbox_license)
+        adv_layout.addLayout(author_row)
+
+        lbl_scripts = QLabel("Zusätzliche Projekt-Skripte (z. B. in pyproject.toml oder package.json):")
+        lbl_scripts.setObjectName("formLabel")
+        adv_layout.addWidget(lbl_scripts)
+
+        script_input_row = QHBoxLayout()
+        self.script_name_input = QLineEdit()
+        self.script_name_input.setPlaceholderText("Skript-Name (z.B. format)")
+        self.script_cmd_input = QLineEdit()
+        self.script_cmd_input.setPlaceholderText("Befehl (z.B. ruff format .)")
+        add_script_btn = QPushButton("➕ Hinzufügen")
+        add_script_btn.setObjectName("toolButton")
+        add_script_btn.clicked.connect(self._add_custom_script)
+        remove_script_btn = QPushButton("➖ Entfernen")
+        remove_script_btn.setObjectName("toolButton")
+        remove_script_btn.clicked.connect(self._remove_custom_script)
+
+        script_input_row.addWidget(self.script_name_input, 1)
+        script_input_row.addWidget(self.script_cmd_input, 2)
+        script_input_row.addWidget(add_script_btn)
+        script_input_row.addWidget(remove_script_btn)
+        adv_layout.addLayout(script_input_row)
+
+        self.scripts_table = QTableWidget(0, 2)
+        self.scripts_table.setHorizontalHeaderLabels(["Name", "Befehl"])
+        self.scripts_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.scripts_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.scripts_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.scripts_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.scripts_table.setMaximumHeight(120)
+        adv_layout.addWidget(self.scripts_table)
+        layout.addWidget(self.advanced_box)
+
+        # 6. Agenten-Regeln & Skills Sektion
+        self.agent_box = QGroupBox("Agenten-Regeln & Skills (.agents/ & AGENTS.md)")
+        agent_box_layout = QVBoxLayout(self.agent_box)
+
+        self.agent_configs_enable_cb = QCheckBox("Agenten-Konfiguration für Coding-Assistenten generieren")
+        self.agent_configs_enable_cb.setChecked(True)
+        self.agent_configs_enable_cb.setStyleSheet("font-weight: 600; color: #7aa2f7;")
+        agent_box_layout.addWidget(self.agent_configs_enable_cb)
+
+        self.agent_container = QWidget()
+        self.agent_container_layout = QVBoxLayout(self.agent_container)
+        self.agent_container_layout.setContentsMargins(16, 4, 4, 4)
+
+        lbl_rules = QLabel("Vorgeschlagene Regeln (.agents/rules/):")
+        lbl_rules.setStyleSheet("font-weight: 600; color: #bb9af7;")
+        self.agent_container_layout.addWidget(lbl_rules)
+        self.agent_rules_layout = QVBoxLayout()
+        self.agent_container_layout.addLayout(self.agent_rules_layout)
+
+        lbl_skills = QLabel("Vorgeschlagene Skills (.agents/skills/):")
+        lbl_skills.setStyleSheet("font-weight: 600; color: #bb9af7; margin-top: 6px;")
+        self.agent_container_layout.addWidget(lbl_skills)
+        self.agent_skills_layout = QVBoxLayout()
+        self.agent_container_layout.addLayout(self.agent_skills_layout)
+
+        agent_box_layout.addWidget(self.agent_container)
+        self.agent_configs_enable_cb.toggled.connect(self.agent_container.setEnabled)
+        layout.addWidget(self.agent_box)
+
+        # 7. Buttons & Log
         btn_row = QHBoxLayout()
         self.run_btn = QPushButton("▶  Projekt initialisieren")
         self.run_btn.setObjectName("primaryButton")
@@ -259,17 +406,6 @@ class MainWindow(QMainWindow):
         self.log_view.setReadOnly(True)
         self.log_view.setMinimumHeight(160)
 
-        layout.addWidget(lbl_name)
-        layout.addWidget(self.name_input)
-        layout.addWidget(self.name_error_label)
-        layout.addWidget(lbl_desc)
-        layout.addWidget(self.desc_input)
-        layout.addWidget(lbl_path)
-        layout.addLayout(path_layout)
-        layout.addLayout(tpl_header_layout)
-        layout.addWidget(self.template_combo)
-        layout.addWidget(self.template_desc_label)
-        layout.addWidget(self.options_box)
         layout.addLayout(btn_row)
         layout.addWidget(lbl_log)
         layout.addWidget(self.log_view)
@@ -326,6 +462,116 @@ class MainWindow(QMainWindow):
             self.run_btn.setEnabled(True)
             self.run_btn.setToolTip("")
 
+    # ── Git Hooks Setup ─────────────────────────────────────────────────────
+
+    def _populate_git_hooks(self):
+        """Discovers and displays available git hooks with tooltips."""
+        while self.git_hooks_list_layout.count():
+            item = self.git_hooks_list_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self.hook_checkboxes.clear()
+
+        available_hooks = self.template_manager.get_available_hooks()
+        for hook in available_hooks:
+            hook_id = hook["id"]
+            cb = QCheckBox(f"{hook['name']} ({hook_id})")
+            cb.setToolTip(hook["description"])
+            cb.setChecked(hook.get("default", True))
+            self.git_hooks_list_layout.addWidget(cb)
+            self.hook_checkboxes[hook_id] = cb
+
+    # ── Agenten-Regeln & Skills ─────────────────────────────────────────────
+
+    def _refresh_agent_configs(self):
+        """Populates rule and skill checkboxes and sets recommended defaults."""
+        while self.agent_rules_layout.count():
+            item = self.agent_rules_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        while self.agent_skills_layout.count():
+            item = self.agent_skills_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        self.agent_rule_checkboxes.clear()
+        self.agent_skill_checkboxes.clear()
+
+        template_id = self.template_combo.currentData() or ""
+        template_meta = self.template_manager.templates.get(template_id, {})
+        language = template_meta.get("language", "")
+
+        manifest = self.template_manager.get_agent_manifest()
+        recommendations = self.template_manager.get_recommended_agent_configs(template_id, language)
+        recommended_rules = set(recommendations.get("rules", []))
+        recommended_skills = set(recommendations.get("skills", []))
+
+        # Rules checkboxes
+        for rule in manifest.get("rules", []):
+            r_id = rule.get("id")
+            cb = QCheckBox(f"{rule.get('name')}  –  {rule.get('description')}")
+            cb.setToolTip(rule.get("description"))
+            cb.setChecked(r_id in recommended_rules)
+            self.agent_rules_layout.addWidget(cb)
+            self.agent_rule_checkboxes[r_id] = cb
+
+        # Skills checkboxes
+        for skill in manifest.get("skills", []):
+            s_id = skill.get("id")
+            cb = QCheckBox(f"{skill.get('name')}  –  {skill.get('description')}")
+            cb.setToolTip(skill.get("description"))
+            cb.setChecked(s_id in recommended_skills)
+            self.agent_skills_layout.addWidget(cb)
+            self.agent_skill_checkboxes[s_id] = cb
+
+    # ── Benutzerdefinierte Skripte ──────────────────────────────────────────
+
+    def _add_custom_script(self):
+        name = self.script_name_input.text().strip()
+        cmd = self.script_cmd_input.text().strip()
+        if not name or not cmd:
+            return
+
+        row = self.scripts_table.rowCount()
+        self.scripts_table.insertRow(row)
+        self.scripts_table.setItem(row, 0, QTableWidgetItem(name))
+        self.scripts_table.setItem(row, 1, QTableWidgetItem(cmd))
+        self.script_name_input.clear()
+        self.script_cmd_input.clear()
+        self._save_scripts_settings()
+
+    def _remove_custom_script(self):
+        row = self.scripts_table.currentRow()
+        if row >= 0:
+            self.scripts_table.removeRow(row)
+            self._save_scripts_settings()
+
+    def _get_custom_scripts_dict(self) -> dict[str, str]:
+        scripts = {}
+        for row in range(self.scripts_table.rowCount()):
+            name_item = self.scripts_table.item(row, 0)
+            cmd_item = self.scripts_table.item(row, 1)
+            if name_item and cmd_item:
+                scripts[name_item.text()] = cmd_item.text()
+        return scripts
+
+    def _save_scripts_settings(self):
+        scripts = self._get_custom_scripts_dict()
+        self.settings.setValue("custom_scripts", json.dumps(scripts))
+
+    def _load_scripts_settings(self):
+        raw = self.settings.value("custom_scripts", "{}")
+        try:
+            scripts = json.loads(raw) if isinstance(raw, str) else {}
+            self.scripts_table.setRowCount(0)
+            for name, cmd in scripts.items():
+                row = self.scripts_table.rowCount()
+                self.scripts_table.insertRow(row)
+                self.scripts_table.setItem(row, 0, QTableWidgetItem(str(name)))
+                self.scripts_table.setItem(row, 1, QTableWidgetItem(str(cmd)))
+        except Exception:
+            pass
+
     # ── Template Management ─────────────────────────────────────────────────
 
     def _populate_templates(self):
@@ -349,13 +595,29 @@ class MainWindow(QMainWindow):
         self.template_manager.reload_templates()
         self._populate_templates()
         self._on_template_changed()
+        self._populate_git_hooks()
+        self._refresh_agent_configs()
         count = len(self.template_manager.templates)
         self.statusBar().showMessage(f"{count} Vorlagen erfolgreich aktualisiert.", 3000)
-        self.log_view.append(f"Vorlagen neu geladen ({count} Vorlagen gefunden).")
+        self.log_view.append(f"Vorlagen und Assets neu geladen ({count} Vorlagen gefunden).")
 
     def _open_templates_dir(self):
         """Opens the templates folder in the system file manager."""
         folder = self.default_templates_dir
+        if not folder.exists():
+            folder.mkdir(parents=True, exist_ok=True)
+        self._open_directory(folder)
+
+    def _open_hooks_dir(self):
+        """Opens the hooks folder in the system file manager."""
+        folder = self.template_manager.hooks_dir
+        if not folder.exists():
+            folder.mkdir(parents=True, exist_ok=True)
+        self._open_directory(folder)
+
+    def _open_agents_dir(self):
+        """Opens the agent configs folder in the system file manager."""
+        folder = self.template_manager.agent_configs_dir
         if not folder.exists():
             folder.mkdir(parents=True, exist_ok=True)
         self._open_directory(folder)
@@ -367,7 +629,6 @@ class MainWindow(QMainWindow):
             path_obj = Path(folder)
             self.template_manager.add_custom_dir(path_obj)
 
-            # Persist custom dirs
             custom_dirs_raw = self.settings.value("custom_templates_dirs", [])
             custom_list = list(custom_dirs_raw) if isinstance(custom_dirs_raw, list) else []
             if str(path_obj) not in custom_list:
@@ -459,6 +720,9 @@ class MainWindow(QMainWindow):
                 self.options_layout.addWidget(cb)
                 self.option_checkboxes[opt_id] = cb
 
+        # Update recommended agent configs for the new template
+        self._refresh_agent_configs()
+
     # ── Einstellungen Persistenz ────────────────────────────────────────────
 
     def _load_saved_settings(self):
@@ -484,6 +748,17 @@ class MainWindow(QMainWindow):
             default_path = str(Path.home() / "Documents")
             self.path_input.setText(default_path)
 
+        # Restore author, email, license
+        self.author_input.setText(self.settings.value("author_name", ""))
+        self.email_input.setText(self.settings.value("author_email", ""))
+        saved_license = self.settings.value("license", "MIT")
+        idx = self.license_combo.findText(saved_license)
+        if idx >= 0:
+            self.license_combo.setCurrentIndex(idx)
+
+        # Restore scripts
+        self._load_scripts_settings()
+
     def _save_path_setting(self, text: str):
         cleaned = text.strip()
         if cleaned:
@@ -495,6 +770,10 @@ class MainWindow(QMainWindow):
         self.settings.setValue("windowState", self.saveState())
         self.settings.setValue("fullscreen", self.isFullScreen())
         self.settings.setValue("last_path", self.path_input.text().strip())
+        self.settings.setValue("author_name", self.author_input.text().strip())
+        self.settings.setValue("author_email", self.email_input.text().strip())
+        self.settings.setValue("license", self.license_combo.currentText())
+        self._save_scripts_settings()
         current_tpl = self.template_combo.currentData()
         if current_tpl:
             self.settings.setValue("last_template", current_tpl)
@@ -541,12 +820,32 @@ class MainWindow(QMainWindow):
             return
 
         template_meta = self.template_manager.templates.get(template_id, {})
+        license_val = self.license_combo.currentText()
+        if license_val == "Keine":
+            license_val = ""
+
         context = {
             "project_name": name,
             "project_slug": name.lower().replace("-", "_").replace(" ", "_"),
             "description": self.desc_input.text().strip(),
             "language": template_meta.get("language", ""),
+            "author": self.author_input.text().strip(),
+            "author_email": self.email_input.text().strip(),
+            "license": license_val,
+            "custom_scripts": self._get_custom_scripts_dict(),
+            "enable_git_hooks": self.git_hooks_enable_cb.isChecked(),
+            "selected_git_hooks": [
+                h_id for h_id, cb in self.hook_checkboxes.items() if cb.isChecked()
+            ],
+            "enable_agent_configs": self.agent_configs_enable_cb.isChecked(),
+            "selected_agent_rules": [
+                r_id for r_id, cb in self.agent_rule_checkboxes.items() if cb.isChecked()
+            ],
+            "selected_agent_skills": [
+                s_id for s_id, cb in self.agent_skill_checkboxes.items() if cb.isChecked()
+            ],
         }
+
         for opt_id, cb in self.option_checkboxes.items():
             context[opt_id] = cb.isChecked()
         for opt_id, combo in self.option_selects.items():
@@ -629,10 +928,11 @@ class MainWindow(QMainWindow):
             "<p><b>Funktionen:</b></p>"
             "<ul>"
             "<li>Unterstützt Python (CLI, FastAPI, GUI), Rust (CLI, GUI) und Node/TypeScript</li>"
-            "<li>Automatische Git-Initialisierung und Post-Hooks</li>"
-            "<li>Vollbildmodus (F11) und Fenstermodus</li>"
+            "<li>Optimierte Pipeline: uv init → uv venv → git init mit Git-Hooks (SemVer, Changelog)</li>"
+            "<li>Modulare Generierung von Coding-Agent-Regeln und Skills (.agents/ & AGENTS.md)</li>"
+            "<li>Konfigurierbare Autoren-, Lizenz- und Script-Metadaten</li>"
+            "<li>Vollbildmodus (F11) und Fenstermodus mit Theme-Unterstützung</li>"
             "<li>Persistente Einstellungen mit QSettings</li>"
-            "<li>Benutzerdefinierte Vorlagenordner und Vorlagen-Reload</li>"
             "<li>Abbruch laufender Erstellungen</li>"
             "</ul>"
             "<p>© 2026 Daniel Rösch</p>"

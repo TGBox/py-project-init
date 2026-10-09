@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+
+if [ "$GIT_CHANGELOG_RUNNING" = "1" ]; then
+  exit 0
+fi
+
+python3 - << 'EOF'
+import subprocess
+import re
+import json
+from collections import defaultdict
+
+# 1. Bestehende H1-Überschrift einlesen
+header = "# Changelog"
+try:
+    with open("CHANGELOG.md", "r", encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("# "):
+                header = line.strip()
+                break
+except Exception:
+    pass
+
+# 2. Alle Commits chronologisch (alt nach neu) inkl. geänderter Dateien holen
+raw = subprocess.check_output(
+    ["git", "log", "--reverse", "--name-only", "--pretty=format:COMMIT:%h\t%ad\t%s", "--date=short"],
+    text=True
+)
+
+commits = []
+curr = None
+for line in raw.splitlines():
+    if line.startswith("COMMIT:"):
+        parts = line[7:].split("\t", 2)
+        if len(parts) == 3:
+            h, ad, s = parts
+            curr = {"hash": h, "line": f"{ad} ({h}): {s}", "files": []}
+            commits.append(curr)
+    elif curr and line.strip():
+        curr["files"].append(line.strip())
+
+def get_version_at_commit(commit_hash):
+    for fname in ("pyproject.toml", "package.json"):
+        try:
+            content = subprocess.check_output(
+                ["git", "show", f"{commit_hash}:{fname}"],
+                stderr=subprocess.DEVNULL,
+                text=True
+            )
+            if fname == "pyproject.toml":
+                m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', content)
+                if m:
+                    return m.group(1)
+            elif fname == "package.json":
+                data = json.loads(content)
+                if "version" in data:
+                    return str(data["version"])
+        except Exception:
+            pass
+    return None
+
+# 3. Commits den jeweiligen Versionen zuordnen
+version_order = []
+version_commits = defaultdict(list)
+current_ver = None
+
+for c in commits:
+    touched = any(f in ("pyproject.toml", "package.json") for f in c["files"])
+    if current_ver is None or touched:
+        v = get_version_at_commit(c["hash"])
+        if v:
+            current_ver = v
+
+    ver_key = current_ver or "Unreleased"
+    if ver_key not in version_order:
+        version_order.append(ver_key)
+    version_commits[ver_key].append(c["line"])
+
+# 4. Changelog linter-konform zusammenbauen (neueste Version & Commits oben)
+sections = []
+for ver in reversed(version_order):
+    title = f"## SemVer v{ver}" if ver != "Unreleased" else "## Unreleased"
+    sec = [title, ""]
+    for c_line in reversed(version_commits[ver]):
+        sec.append(f"- {c_line}")
+    sections.append("\n".join(sec))
+
+output = header + "\n\n" + "\n\n".join(sections) + "\n"
+
+with open("CHANGELOG.md", "w", encoding="utf-8") as f:
+    f.write(output)
+EOF
+
+# 5. Bei Änderungen per Amend committen
+if ! git diff --quiet CHANGELOG.md; then
+  export GIT_CHANGELOG_RUNNING=1
+  git add CHANGELOG.md
+  git commit --no-verify --amend --no-edit
+fi
