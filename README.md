@@ -14,10 +14,16 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
   - Deklarative `pre_init`-Hooks in `template.yaml` (z. B. automatisches `uv init` und `uv venv`).
   - Beibehaltung der durch `uv init` erzeugten `.gitignore` kombiniert mit Template-spezifischen Ignore-Einträgen.
   - Sauberes Überschreiben von Dummy-Dateien durch die Jinja2-Vorlagen.
-- **Modulare Git-Hooks Integration:**
-  - Feingranulare Auswahl in der UI für verfügbare Hooks aus dem Ordner `hooks/`.
-  - **Pre-Commit (SemVer-Bump):** Fragt interaktiv nach Version-Bumps (Patch/Minor/Major) und aktualisiert `pyproject.toml` bzw. `package.json`.
-  - **Post-Commit (Changelog-Generator):** Erstellt und aktualisiert die `CHANGELOG.md` linter-konform anhand der Git-Historie.
+- **Modulare Git-Hooks Integration (8 clientseitige Hooks):**
+  - Feingranulare Auswahl in der UI für verfügbare Hooks aus dem Ordner `hooks/`:
+    - **`pre-commit` (SemVer-Bump & Secret-Scanner):** Blockiert versehentlich gestagte Secrets (`.env`, Private Keys), Dateien >10MB und fragt interaktiv nach SemVer-Bumps.
+    - **`commit-msg` (Conventional Commits Linter):** Erzwingt standardisierte Commit-Nachrichten (`feat:`, `fix:`, `chore:`, `docs:`, etc.) mit Mindestlänge.
+    - **`prepare-commit-msg` (Ticket-ID aus Branch):** Liest Ticket-Schlüssel aus Branch-Namen (z. B. `feature/PROJ-123` → `[PROJ-123]`) und stellt sie der Commit-Nachricht voran.
+    - **`post-commit` (Changelog-Generator):** Generiert und aktualisiert automatisch eine linter-konforme `CHANGELOG.md` basierend auf Commits.
+    - **`post-checkout` (Dependency-Sync & Branch-Check):** Führt `uv sync` oder `npm install` aus, wenn Lockfiles geändert wurden, und warnt vor direkter Arbeit auf `main`.
+    - **`post-merge` (Lockfile-Sync & .env-Vergleich):** Synchronisiert Abhängigkeiten nach Merges/Pulls und warnt vor fehlenden Variablen aus `.env.example`.
+    - **`pre-rebase` (Historien-Schutz):** Blockiert versehentliches Rebasen der Haupt-Branches (`main`/`master`).
+    - **`pre-push` (Branch-Schutz & Test-Gate):** Blockiert direkte Pushes auf `main`/`master` und führt vor dem Push die Test-Suite aus.
   - Automatischer initialer Commit während der Generierung via `--no-verify`.
 - **Agenten-Regeln & Skills (.agents/):**
   - Modulare Bibliothek unter `assets/agent_configs/` für Coding-Assistenten.

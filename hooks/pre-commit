@@ -6,15 +6,64 @@ if [ "$GIT_CHANGELOG_RUNNING" = "1" ]; then
   exit 0
 fi
 
-# Pre-Commit Hook um die SemVer Änderung abzufragen, und anschließend automatisch die Versionsnummer in der jeweiligen Config Datei anzupassen.
+# -----------------------------------------------------------------------------
+# 1. Große Dateien blockieren (> 10 MB)
+# -----------------------------------------------------------------------------
+MAX_FILE_SIZE_KB=10240
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null || echo "")
 
-# Eingabe über Terminal (TTY) erzwingen
-exec < /dev/tty
+for FILE in $STAGED_FILES; do
+  if [ -f "$FILE" ]; then
+    FILE_SIZE_KB=$(du -k "$FILE" 2>/dev/null | cut -f1 || echo 0)
+    if [ "$FILE_SIZE_KB" -gt "$MAX_FILE_SIZE_KB" ]; then
+      echo "----------------------------------------------------------------" >&2
+      echo "FEHLER: Datei '$FILE' überschreitet das Limit von 10 MB (${FILE_SIZE_KB} KB)." >&2
+      echo "Große Binärdateien sollten nicht direkt im Git-Repository versioniert werden." >&2
+      echo "----------------------------------------------------------------" >&2
+      exit 1
+    fi
+  fi
+done
 
-# Aktuelle Version vorab ermitteln
-CURRENT_VERSION=""
-if [ -f "pyproject.toml" ]; then
-  CURRENT_VERSION=$(python3 -c "
+# -----------------------------------------------------------------------------
+# 2. Secrets & .env Scanning
+# -----------------------------------------------------------------------------
+for FILE in $STAGED_FILES; do
+  # Prüfung auf .env Dateien
+  if [ "$FILE" = ".env" ] || echo "$FILE" | grep -Eq '(^|/)\.env(\.local|\.production|\.prod)?$'; then
+    echo "----------------------------------------------------------------" >&2
+    echo "FEHLER: Gestagte Datei '$FILE' enthält möglicherweise sensible Zugangsdaten!" >&2
+    echo "Verwenden Sie stattdessen eine unkritische '.env.example'-Datei." >&2
+    echo "----------------------------------------------------------------" >&2
+    exit 1
+  fi
+
+  # Prüfung auf private Schlüssel und Tokens
+  if [ -f "$FILE" ]; then
+    if grep -Eq 'BEGIN (RSA|OPENSSH|EC|DSA)? PRIVATE KEY' "$FILE" 2>/dev/null; then
+      echo "----------------------------------------------------------------" >&2
+      echo "FEHLER: Datei '$FILE' enthält einen privaten Schlüssel (Private Key)!" >&2
+      echo "Commit abgebrochen aus Sicherheitsgründen." >&2
+      echo "----------------------------------------------------------------" >&2
+      exit 1
+    fi
+  fi
+done
+
+# -----------------------------------------------------------------------------
+# 3. Interaktiver SemVer Bump
+# -----------------------------------------------------------------------------
+# Nur ausführen, wenn ein interaktives Terminal (TTY) verfügbar ist
+if [ -t 0 ] || [ -e /dev/tty ]; then
+  # Eingabe über Terminal (TTY) erzwingen
+  if [ -e /dev/tty ]; then
+    exec < /dev/tty 2>/dev/null || true
+  fi
+
+  # Aktuelle Version vorab ermitteln
+  CURRENT_VERSION=""
+  if [ -f "pyproject.toml" ]; then
+    CURRENT_VERSION=$(python3 -c "
 import re
 try:
     with open('pyproject.toml', 'r', encoding='utf-8') as f:
@@ -23,43 +72,44 @@ try:
             print(f'{m.group(1)}.{m.group(2)}.{m.group(3)}')
 except Exception:
     pass
-")
-elif [ -f "package.json" ]; then
-  CURRENT_VERSION=$(python3 -c "
+" 2>/dev/null || true)
+  elif [ -f "package.json" ]; then
+    CURRENT_VERSION=$(python3 -c "
 import json
 try:
     with open('package.json', 'r', encoding='utf-8') as f:
         print(json.load(f).get('version', ''))
 except Exception:
     pass
-")
-fi
+" 2>/dev/null || true)
+  fi
 
-echo "----------------------------------------"
-if [ -n "$CURRENT_VERSION" ]; then
-  echo "Aktuelle Version: v$CURRENT_VERSION"
   echo "----------------------------------------"
-fi
-echo "SemVer Bump auswählen:"
-echo "1) Patch"
-echo "2) Minor"
-echo "3) Major"
-echo "s) Überspringen (keine Änderung)"
-echo "----------------------------------------"
-read -r -p "Auswahl [1/2/3/s]: " choice
+  if [ -n "$CURRENT_VERSION" ]; then
+    echo "Aktuelle Version: v$CURRENT_VERSION"
+    echo "----------------------------------------"
+  fi
+  echo "SemVer Bump auswählen:"
+  echo "1) Patch"
+  echo "2) Minor"
+  echo "3) Major"
+  echo "s) Überspringen (keine Änderung)"
+  echo "----------------------------------------"
+  read -r -p "Auswahl [1/2/3/s]: " choice || choice="s"
 
-BUMP=""
-case "$choice" in
-  1) BUMP="patch" ;;
-  2) BUMP="minor" ;;
-  3) BUMP="major" ;;
-  s|S|"") echo "Version unverändert gelassen."; exit 0 ;;
-  *) echo "Ungültige Auswahl, Commit abgebrochen."; exit 1 ;;
-esac
+  BUMP=""
+  case "$choice" in
+    1) BUMP="patch" ;;
+    2) BUMP="minor" ;;
+    3) BUMP="major" ;;
+    s|S|"") echo "Version unverändert gelassen." ;;
+    *) echo "Ungültige Auswahl, Version unverändert gelassen." ;;
+  esac
 
-# 1. Python-Projekt (pyproject.toml & uv.lock)
-if [ -f "pyproject.toml" ]; then
-  python3 -c "
+  if [ -n "$BUMP" ]; then
+    # 1. Python-Projekt (pyproject.toml & uv.lock)
+    if [ -f "pyproject.toml" ]; then
+      python3 -c "
 import re, sys
 
 part = '$BUMP'
@@ -69,45 +119,46 @@ with open(file, 'r', encoding='utf-8') as f:
     content = f.read()
 
 m = re.search(r'version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"', content)
-if not m:
-    sys.exit('Keine SemVer-Version in pyproject.toml gefunden.')
+if m:
+    major, minor, patch = map(int, m.groups())
+    if part == 'major':
+        major += 1
+        minor = 0
+        patch = 0
+    elif part == 'minor':
+        minor += 1
+        patch = 0
+    elif part == 'patch':
+        patch += 1
 
-major, minor, patch = map(int, m.groups())
-if part == 'major':
-    major += 1
-    minor = 0
-    patch = 0
-elif part == 'minor':
-    minor += 1
-    patch = 0
-elif part == 'patch':
-    patch += 1
+    new_ver = f'{major}.{minor}.{patch}'
+    content = re.sub(r'version\s*=\s*\"\d+\.\d+\.\d+\"', f'version = \"{new_ver}\"', content, count=1)
 
-new_ver = f'{major}.{minor}.{patch}'
-content = re.sub(r'version\s*=\s*\"\d+\.\d+\.\d+\"', f'version = \"{new_ver}\"', content, count=1)
+    with open(file, 'w', encoding='utf-8') as f:
+        f.write(content)
 
-with open(file, 'w', encoding='utf-8') as f:
-    f.write(content)
-
-print(f'pyproject.toml: {m.group(1)}.{m.group(2)}.{m.group(3)} -> {new_ver}')
+    print(f'pyproject.toml: {m.group(1)}.{m.group(2)}.{m.group(3)} -> {new_ver}')
 "
-  git add pyproject.toml
+      git add pyproject.toml
 
-  if [ -f "uv.lock" ]; then
-    uv lock
-    git add uv.lock
-    echo "uv.lock aktualisiert und gestaged."
+      if [ -f "uv.lock" ] && command -v uv >/dev/null 2>&1; then
+        uv lock
+        git add uv.lock
+        echo "uv.lock aktualisiert und gestaged."
+      fi
+    fi
+
+    # 2. Node-Projekt (package.json)
+    if [ -f "package.json" ]; then
+      if command -v npm >/dev/null 2>&1; then
+        npm version "$BUMP" --no-git-tag-version
+        git add package.json
+        if [ -f "package-lock.json" ]; then
+          git add package-lock.json
+        fi
+      fi
+    fi
   fi
 fi
 
-# 2. Node-Projekt (package.json)
-if [ -f "package.json" ]; then
-  npm version "$BUMP" --no-git-tag-version
-  git add package.json
-  
-  if [ -f "package-lock.json" ]; then
-    git add package-lock.json
-  fi
-fi
-
-echo "Versionsdateien erfolgreich aktualisiert."
+echo "Pre-Commit Checks erfolgreich abgeschlossen."

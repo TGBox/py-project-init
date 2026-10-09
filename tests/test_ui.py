@@ -22,10 +22,14 @@ class TestMainWindow(unittest.TestCase):
         self.assertIsNotNone(self.window.template_combo)
         self.assertGreater(self.window.template_combo.count(), 0)
 
-        # Check git hooks section
+        # Check git hooks section - all 8 client hooks
         self.assertTrue(self.window.git_hooks_enable_cb.isChecked())
-        self.assertIn("pre-commit", self.window.hook_checkboxes)
-        self.assertIn("post-commit", self.window.hook_checkboxes)
+        expected_hooks = [
+            "pre-commit", "commit-msg", "prepare-commit-msg", "post-commit",
+            "post-checkout", "post-merge", "pre-rebase", "pre-push"
+        ]
+        for h in expected_hooks:
+            self.assertIn(h, self.window.hook_checkboxes)
 
         # Check agent config section
         self.assertTrue(self.window.agent_configs_enable_cb.isChecked())

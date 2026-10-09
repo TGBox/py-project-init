@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+PREV_HEAD="$1"
+NEW_HEAD="$2"
+IS_BRANCH_CHECKOUT="$3"
+
+# Nur bei echtem Branch-Checkout (1)
+if [ "$IS_BRANCH_CHECKOUT" = "1" ]; then
+    BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+    if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+        echo "ℹ Hinweis: Sie befinden sich direkt auf dem Haupt-Branch '$BRANCH'."
+        echo "  Für neue Funktionen bitte einen Feature-Branch anlegen: git switch -c feature/..."
+    fi
+
+    # Prüfen, ob Lockfiles sich zwischen PREV_HEAD und NEW_HEAD geändert haben
+    if [ -n "$PREV_HEAD" ] && [ -n "$NEW_HEAD" ] && [ "$PREV_HEAD" != "0000000000000000000000000000000000000000" ]; then
+        DIFF_FILES=$(git diff --name-only "$PREV_HEAD" "$NEW_HEAD" 2>/dev/null || echo "")
+        
+        if echo "$DIFF_FILES" | grep -q "uv.lock"; then
+            if command -v uv >/dev/null 2>&1; then
+                echo "uv.lock wurde aktualisiert – synchronisiere Abhängigkeiten..."
+                uv sync
+            fi
+        fi
+
+        if echo "$DIFF_FILES" | grep -q "package-lock.json"; then
+            if command -v npm >/dev/null 2>&1; then
+                echo "package-lock.json wurde aktualisiert – installiere Abhängigkeiten..."
+                npm install
+            fi
+        fi
+
+        if echo "$DIFF_FILES" | grep -q "Cargo.lock"; then
+            if command -v cargo >/dev/null 2>&1; then
+                echo "Cargo.lock wurde aktualisiert – prüfe Abhängigkeiten..."
+                cargo check
+            fi
+        fi
+    fi
+fi

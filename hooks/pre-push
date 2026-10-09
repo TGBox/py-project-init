@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -e
+
+REMOTE="$1"
+URL="$2"
+
+# Git übergibt die zu pushenden Refs via Stdin:
+# <local ref> <local sha> <remote ref> <remote sha>
+while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+    if [ "$REMOTE_REF" = "refs/heads/main" ] || [ "$REMOTE_REF" = "refs/heads/master" ]; then
+        echo "----------------------------------------------------------------" >&2
+        echo "FEHLER: Direkter Push auf '$REMOTE_REF' ist blockiert!" >&2
+        echo "Bitte verwenden Sie einen Feature-Branch und erstellen Sie einen Pull Request." >&2
+        echo "----------------------------------------------------------------" >&2
+        exit 1
+    fi
+done
+
+if [ "$GIT_PRE_PUSH_SKIP_TESTS" = "1" ]; then
+    exit 0
+fi
+
+# Wenn Tests vorhanden sind, vor dem Push ausführen:
+if [ -f "pyproject.toml" ] && command -v uv >/dev/null 2>&1 && [ -d "tests" ]; then
+    if uv run pytest --version >/dev/null 2>&1; then
+        echo "Führe pytest vor dem Push aus..."
+        uv run pytest -q || {
+            echo "FEHLER: pytest vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+            exit 1
+        }
+    fi
+elif [ -f "Cargo.toml" ] && command -v cargo >/dev/null 2>&1; then
+    echo "Führe cargo test vor dem Push aus..."
+    cargo test -q || {
+        echo "FEHLER: cargo test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+        exit 1
+    }
+elif [ -f "package.json" ] && command -v npm >/dev/null 2>&1; then
+    if npm run | grep -q "test"; then
+        echo "Führe npm test vor dem Push aus..."
+        npm test || {
+            echo "FEHLER: npm test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+            exit 1
+        }
+    fi
+fi

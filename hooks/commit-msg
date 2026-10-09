@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -e
+
+MSG_FILE="$1"
+if [ -z "$MSG_FILE" ] || [ ! -f "$MSG_FILE" ]; then
+    exit 0
+fi
+
+# Erste nicht-kommentierte Zeile einlesen
+FIRST_LINE=$(grep -v '^#' "$MSG_FILE" | head -n 1 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+# Wenn die Nachricht leer ist, Abbruch
+if [ -z "$FIRST_LINE" ]; then
+    echo "Fehler: Die Commit-Nachricht darf nicht leer sein." >&2
+    exit 1
+fi
+
+# Automatische Git-Nachrichten überspringen (z. B. Merge, Revert, Fixup, Squash)
+if echo "$FIRST_LINE" | grep -Eq '^(Merge|Revert|fixup!|squash!)'; then
+    exit 0
+fi
+
+# Conventional Commits Regex:
+# Typ(Scope optional)!: Mind. 5 Zeichen Beschreibung
+PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_.-]+\))?!?: .{5,}'
+
+if ! echo "$FIRST_LINE" | grep -Eq "$PATTERN"; then
+    echo "----------------------------------------------------------------" >&2
+    echo "FEHLER: Ungültiges Format der Commit-Nachricht!" >&2
+    echo "Die Nachricht muss dem 'Conventional Commits'-Standard folgen:" >&2
+    echo "  <typ>(<scope>): <kurze beschreibung>" >&2
+    echo "" >&2
+    echo "Gültige Typen: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert" >&2
+    echo "Beispiel: feat(auth): implement jwt token verification" >&2
+    echo "Ihre Eingabe war: '$FIRST_LINE'" >&2
+    echo "----------------------------------------------------------------" >&2
+    exit 1
+fi

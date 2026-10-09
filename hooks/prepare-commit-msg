@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -e
+
+MSG_FILE="$1"
+MSG_SRC="$2"
+
+if [ -z "$MSG_FILE" ] || [ ! -f "$MSG_FILE" ]; then
+    exit 0
+fi
+
+# Nur bei regulären commit-Aufrufen oder Vorlagen (nicht bei merge/squash)
+if [ "$MSG_SRC" = "merge" ] || [ "$MSG_SRC" = "squash" ]; then
+    exit 0
+fi
+
+if [ -n "$GIT_BRANCH_OVERRIDE" ]; then
+    BRANCH_NAME="$GIT_BRANCH_OVERRIDE"
+else
+    BRANCH_NAME=$(git symbolic-ref --short HEAD 2>/dev/null || echo "")
+fi
+
+# Ticket-Muster suchen (z. B. ABC-123 oder PROJ-456)
+ISSUE_ID=$(echo "$BRANCH_NAME" | grep -Eo '([A-Z]{2,10}-[0-9]+)' | head -n 1 || echo "")
+
+if [ -n "$ISSUE_ID" ]; then
+    # Prüfen, ob die ID bereits in der Commit-Nachricht vorhanden ist
+    if ! grep -q "$ISSUE_ID" "$MSG_FILE"; then
+        FIRST_LINE=$(head -n 1 "$MSG_FILE")
+        TEMP_FILE=$(mktemp)
+        echo "[$ISSUE_ID] $FIRST_LINE" > "$TEMP_FILE"
+        tail -n +2 "$MSG_FILE" >> "$TEMP_FILE"
+        mv "$TEMP_FILE" "$MSG_FILE"
+    fi
+fi

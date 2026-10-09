@@ -1,8 +1,39 @@
 pre-commit:
-  name: "Pre-Commit: SemVer-Bump"
-  description: "Fragt bei Commits nach SemVer-Änderung (Patch/Minor/Major) und aktualisiert pyproject.toml bzw. package.json."
+  name: "Pre-Commit: SemVer-Bump & Secret-Scanner"
+  description: "Blockiert gestagte Secrets (.env/Keys), Dateien >10MB und fragt nach SemVer-Bumps."
   default: true
+
+commit-msg:
+  name: "Commit-Msg: Conventional Commits Linter"
+  description: "Erzwingt standardisierte Commit-Nachrichten (feat:, fix:, chore:, docs:, etc.)."
+  default: true
+
+prepare-commit-msg:
+  name: "Prepare-Commit-Msg: Ticket-ID aus Branch"
+  description: "Liest Ticket-IDs aus dem Branch-Namen (z.B. feature/PROJ-123 -> [PROJ-123]) und stellt sie voran."
+  default: false
+
 post-commit:
   name: "Post-Commit: Changelog-Generator"
-  description: "Erstellt und aktualisiert die CHANGELOG.md automatisch anhand der Git-Historie und Versionen."
+  description: "Generiert und aktualisiert automatisch eine linter-konforme CHANGELOG.md basierend auf Commits."
+  default: true
+
+post-checkout:
+  name: "Post-Checkout: Dependency-Sync & Branch-Warnung"
+  description: "Führt uv sync oder npm install aus, wenn Lockfiles geändert wurden, und warnt vor Arbeit auf main."
+  default: true
+
+post-merge:
+  name: "Post-Merge: Lockfile-Sync & .env-Vergleich"
+  description: "Synchronisiert Abhängigkeiten nach Merges/Pulls und warnt vor fehlenden Schlüsseln aus .env.example."
+  default: true
+
+pre-rebase:
+  name: "Pre-Rebase: Historien-Schutz für main/master"
+  description: "Blockiert versehentliches Rebasen der Haupt-Branches (main/master)."
+  default: true
+
+pre-push:
+  name: "Pre-Push: Branch-Schutz & Test-Gate"
+  description: "Blockiert direkte Pushes auf main/master und führt vor dem Push die Test-Suite aus."
   default: true

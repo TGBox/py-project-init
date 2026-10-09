@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+
+# Lockfile-Sync nach Merge/Pull
+DIFF_FILES=$(git diff --name-only HEAD@{1} HEAD 2>/dev/null || echo "")
+
+if echo "$DIFF_FILES" | grep -q "uv.lock"; then
+    if command -v uv >/dev/null 2>&1; then
+        echo "uv.lock nach Merge/Pull aktualisiert – synchronisiere Abhängigkeiten..."
+        uv sync
+    fi
+fi
+
+if echo "$DIFF_FILES" | grep -q "package-lock.json"; then
+    if command -v npm >/dev/null 2>&1; then
+        echo "package-lock.json nach Merge/Pull aktualisiert – installiere Abhängigkeiten..."
+        npm install
+    fi
+fi
+
+if echo "$DIFF_FILES" | grep -q "Cargo.lock"; then
+    if command -v cargo >/dev/null 2>&1; then
+        echo "Cargo.lock nach Merge/Pull aktualisiert – prüfe Abhängigkeiten..."
+        cargo check
+    fi
+fi
+
+# Env-Vergleich: Prüfen ob in .env.example Variablen existieren, die in .env fehlen
+if [ -f ".env.example" ] && [ -f ".env" ]; then
+    MISSING_KEYS=$(grep -E '^[A-Za-z0-9_]+=' .env.example | cut -d '=' -f 1 | while read -r KEY; do
+        if ! grep -E "^${KEY}=" .env >/dev/null 2>&1; then
+            echo "$KEY"
+        fi
+    done)
+
+    if [ -n "$MISSING_KEYS" ]; then
+        echo "----------------------------------------------------------------"
+        echo "WARNUNG: Neue Umgebungsvariablen in .env.example gefunden, die in Ihrer lokalen .env fehlen:"
+        echo "$MISSING_KEYS"
+        echo "Bitte tragen Sie diese in Ihre lokale .env-Datei ein."
+        echo "----------------------------------------------------------------"
+    fi
+fi
