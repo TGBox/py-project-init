@@ -13,7 +13,7 @@ options:
         description: "Offizielle Qt-Bindings von The Qt Company. Sehr mächtig, native Optik auf allen Plattformen, große Widget-Bibliothek. Empfohlen für professionelle Desktop-Apps."
       - value: "pyqt6"
         label: "PyQt6"
-        description: "Inoffizielle Qt-Bindings von Riverbank Computing. Technisch identisch zu PySide6, aber GPL-lizenziert – für proprietäre Software ist eine kommerzielle Lizenz nötig."
+        description: "Inoffizielle Qt-Bindings von Riverbank Computing. Achtung: Strenge GPLv3-Lizenz mit Copyleft (eigener Code muss Open Source sein) oder kostenpflichtige kommerzielle Lizenz nötig."
       - value: "tkinter"
         label: "Tkinter"
         description: "In Python integriert, keine Installation nötig. Einfach zu lernen, aber veraltetes Aussehen und eingeschränkte Widget-Auswahl. Gut für kleine Hilfsprogramme."

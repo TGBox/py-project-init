@@ -94,6 +94,39 @@ class TestMainWindow(unittest.TestCase):
             self.window._on_generation_finished(False, "", True)
             self.assertTrue(self.window.launcher_widget.isHidden())
 
+    def test_pyqt6_license_warning(self):
+        """Tests that selecting PyQt6 triggers a license warning dialog with switch option."""
+        # Test non-PyQt6 doesn't prompt
+        self.assertTrue(self.window._check_pyqt6_warning({"framework": "pyside6"}))
+
+        # Test prompt when framework is pyqt6
+        with patch("py_project_init.ui.main_window.QMessageBox.exec") as mock_exec:
+            # 1. Switch to PySide6
+            context = {"framework": "pyqt6"}
+            with patch.object(
+                self.window, "_check_pyqt6_warning", wraps=self.window._check_pyqt6_warning
+            ):
+                with patch("py_project_init.ui.main_window.QMessageBox.clickedButton") as mock_btn:
+                    # Mock clickedButton to return the first button (switch_btn)
+                    def side_effect():
+                        # The switch button is the first action button
+                        return mock_btn.return_value
+                    
+                    # We can test the logic directly:
+                    # When switch_btn clicked:
+                    box_patch = patch("py_project_init.ui.main_window.QMessageBox")
+                    mock_box_cls = box_patch.start()
+                    mock_instance = mock_box_cls.return_value
+                    mock_switch = "switch_button"
+                    mock_instance.addButton.side_effect = [mock_switch, "continue", "cancel"]
+                    mock_instance.clickedButton.return_value = mock_switch
+
+                    res = self.window._check_pyqt6_warning(context)
+                    box_patch.stop()
+
+                    self.assertTrue(res)
+                    self.assertEqual(context["framework"], "pyside6")
+
 
 if __name__ == "__main__":
     unittest.main()

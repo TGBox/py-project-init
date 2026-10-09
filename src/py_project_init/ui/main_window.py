@@ -749,9 +749,20 @@ class MainWindow(QMainWindow):
                 desc_label.setWordWrap(True)
 
                 def _update(idx, lbl=desc_label, c=combo, choices=opt.get("choices", [])):
-                    desc = choices[idx].get("description", "") if idx < len(choices) else ""
-                    lbl.setText(desc)
-                    c.setToolTip(desc)
+                    if idx < len(choices):
+                        choice = choices[idx]
+                        desc = choice.get("description", "")
+                        val = choice.get("value", "")
+                        if val == "pyqt6":
+                            lbl.setText(
+                                f"<span style='color: #f7768e; font-weight: 600;'>⚠️ Lizenz-Hinweis (GPLv3):</span> "
+                                f"<span style='color: #ff9e64;'>{desc}</span>"
+                            )
+                        else:
+                            lbl.setText(desc)
+                        c.setToolTip(desc)
+                    else:
+                        lbl.setText("")
 
                 combo.currentIndexChanged.connect(_update)
                 _update(default_idx)
@@ -876,6 +887,49 @@ class MainWindow(QMainWindow):
 
         return context
 
+    def _check_pyqt6_warning(self, context: dict) -> bool:
+        """
+        Warns the user before creating or previewing a project with PyQt6 due to GPLv3 Copyleft restrictions.
+        Offers switching to PySide6 (LGPLv3) or continuing.
+        Returns True to proceed, False to cancel.
+        """
+        if context.get("framework") == "pyqt6":
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Warning)
+            box.setWindowTitle("Lizenz-Warnung: PyQt6 (GPLv3)")
+            box.setText("<h3>⚠️ Wichtiger Lizenz-Hinweis zu PyQt6</h3>")
+            box.setInformativeText(
+                "Sie haben <b>PyQt6</b> als GUI-Framework ausgewählt.<br><br>"
+                "<b>Rechtliche Konsequenz (GPLv3 Copyleft):</b><br>"
+                "• Wenn Sie PyQt6 verwenden, <i>muss</i> Ihr gesamter Projekt-Quellcode ebenfalls als Open Source unter der GPLv3 bereitgestellt werden.<br>"
+                "• Für proprietäre oder kommerzielle Closed-Source-Software ist eine kostenpflichtige Lizenz von Riverbank Computing erforderlich.<br><br>"
+                "<b>Empfohlene Alternative:</b> <b>PySide6 (Qt for Python)</b>.<br>"
+                "PySide6 ist das offizielle Binding von <i>The Qt Company</i> unter der flexiblen <b>LGPLv3</b> und darf ohne Lizenzkosten auch für proprietäre Software genutzt werden.<br><br>"
+                "Möchten Sie stattdessen zum offiziellen PySide6 wechseln?"
+            )
+            switch_btn = box.addButton("Zu PySide6 wechseln (Empfohlen)", QMessageBox.ActionRole)
+            continue_btn = box.addButton("Trotzdem mit PyQt6 fortfahren", QMessageBox.ActionRole)
+            cancel_btn = box.addButton("Abbrechen", QMessageBox.RejectRole)
+            box.setDefaultButton(switch_btn)
+
+            box.exec()
+            clicked = box.clickedButton()
+            if clicked == cancel_btn:
+                self.statusBar().showMessage("Vorgang abgebrochen.", 3000)
+                return False
+            elif clicked == switch_btn:
+                if "framework" in self.option_selects:
+                    combo = self.option_selects["framework"]
+                    idx = combo.findData("pyside6")
+                    if idx >= 0:
+                        combo.setCurrentIndex(idx)
+                context["framework"] = "pyside6"
+                self.statusBar().showMessage("Zu PySide6 gewechselt.", 3000)
+                return True
+            else:
+                return True
+        return True
+
     def _show_preview(self):
         """Generates an in-memory virtual preview and opens the preview dialog."""
         template_id = self.template_combo.currentData()
@@ -887,6 +941,9 @@ class MainWindow(QMainWindow):
         if not context["project_name"]:
             context["project_name"] = "preview_project"
             context["project_slug"] = "preview_project"
+
+        if not self._check_pyqt6_warning(context):
+            return
 
         try:
             files_map = self.generator.preview(template_id, context)
@@ -927,6 +984,10 @@ class MainWindow(QMainWindow):
             return
 
         context = self._collect_context()
+
+        # Check for PyQt6 license warning
+        if not self._check_pyqt6_warning(context):
+            return
 
         # Update UI states for running generation
         self.run_btn.setEnabled(False)
