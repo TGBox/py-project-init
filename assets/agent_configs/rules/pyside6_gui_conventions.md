@@ -11,3 +11,4 @@
 3. **Styling & Theme**:
    - Konsistente Stylesheets (QSS) verwenden.
    - Farben mit hohem Kontrast und guter Lesbarkeit einsetzen.
+   - Dark und Light Themes implementieren und konsistent bei der Implementierung neuer Elemente anwenden.
