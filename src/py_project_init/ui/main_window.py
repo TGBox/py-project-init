@@ -2,6 +2,7 @@ import json
 import re
 import sys
 import shutil
+import subprocess
 from pathlib import Path
 from PySide6.QtCore import QThread, Signal, QSettings, QByteArray, QUrl, Qt
 from PySide6.QtGui import QAction, QKeySequence, QDesktopServices
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 from py_project_init.core.generator import TemplateManager
 from py_project_init.ui.styles import DARK_THEME
+from py_project_init.ui.dialogs import PreviewDialog, RetrofitDialog, CreateTemplateDialog
 
 CHECKED_TOOLS = ["git", "uv", "cargo", "npm"]
 _VALID_NAME = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*$")
@@ -141,6 +143,24 @@ class MainWindow(QMainWindow):
         reset_custom_tpl_action = QAction("Zusätzliche Vorlagen-Ordner zurücksetzen", self)
         reset_custom_tpl_action.triggered.connect(self._reset_custom_templates_dirs)
         template_menu.addAction(reset_custom_tpl_action)
+
+        template_menu.addSeparator()
+
+        create_tpl_action = QAction("Neue Vorlage aus bestehendem Projekt erstellen...", self)
+        create_tpl_action.triggered.connect(self._show_create_template_dialog)
+        template_menu.addAction(create_tpl_action)
+
+        # Werkzeuge Menü
+        tools_menu = menubar.addMenu("Werkzeuge")
+
+        retrofit_action = QAction("Bestehendes Projekt nachrüsten (Hooks & Agent-Configs)...", self)
+        retrofit_action.triggered.connect(self._show_retrofit_dialog)
+        tools_menu.addAction(retrofit_action)
+
+        preview_action = QAction("Live-Vorschau generieren...", self)
+        preview_action.setShortcut(QKeySequence("Ctrl+P"))
+        preview_action.triggered.connect(self._show_preview)
+        tools_menu.addAction(preview_action)
 
         # Ansicht Menü (Fullscreen & Windowed mode per user rule)
         view_menu = menubar.addMenu("Ansicht")
@@ -386,19 +406,46 @@ class MainWindow(QMainWindow):
         self.run_btn.setObjectName("primaryButton")
         self.run_btn.clicked.connect(self._start_generation)
 
+        self.preview_btn = QPushButton("👁  Live-Vorschau")
+        self.preview_btn.setObjectName("toolButton")
+        self.preview_btn.clicked.connect(self._show_preview)
+
         self.cancel_btn = QPushButton("✖  Abbrechen")
         self.cancel_btn.setObjectName("cancelButton")
         self.cancel_btn.clicked.connect(self._cancel_generation)
         self.cancel_btn.setVisible(False)
 
-        self.open_btn = QPushButton("📂  Im Explorer öffnen")
+        btn_row.addWidget(self.run_btn)
+        btn_row.addWidget(self.preview_btn)
+        btn_row.addWidget(self.cancel_btn)
+        btn_row.addStretch()
+
+        # Launcher Row (Aktionen nach erfolgreicher Erstellung)
+        self.launcher_widget = QWidget()
+        launcher_layout = QHBoxLayout(self.launcher_widget)
+        launcher_layout.setContentsMargins(0, 2, 0, 2)
+        lbl_launch = QLabel("<b>Projekt öffnen:</b>")
+        lbl_launch.setObjectName("formLabel")
+        launcher_layout.addWidget(lbl_launch)
+
+        self.open_btn = QPushButton("📂  Explorer")
         self.open_btn.setObjectName("successButton")
         self.open_btn.clicked.connect(self._open_in_explorer)
-        self.open_btn.setVisible(False)
+        launcher_layout.addWidget(self.open_btn)
 
-        btn_row.addWidget(self.run_btn)
-        btn_row.addWidget(self.cancel_btn)
-        btn_row.addWidget(self.open_btn)
+        self.vscode_btn = QPushButton("💻  VS Code")
+        self.vscode_btn.clicked.connect(self._open_in_vscode)
+        launcher_layout.addWidget(self.vscode_btn)
+
+        self.cursor_btn = QPushButton("⚡  Cursor")
+        self.cursor_btn.clicked.connect(self._open_in_cursor)
+        launcher_layout.addWidget(self.cursor_btn)
+
+        self.term_btn = QPushButton("🖥  Terminal")
+        self.term_btn.clicked.connect(self._open_in_terminal)
+        launcher_layout.addWidget(self.term_btn)
+        launcher_layout.addStretch()
+        self.launcher_widget.setVisible(False)
 
         lbl_log = QLabel("Status / Ausführungsprotokoll:")
         lbl_log.setObjectName("formLabel")
@@ -407,6 +454,7 @@ class MainWindow(QMainWindow):
         self.log_view.setMinimumHeight(160)
 
         layout.addLayout(btn_row)
+        layout.addWidget(self.launcher_widget)
         layout.addWidget(lbl_log)
         layout.addWidget(self.log_view)
 
@@ -790,35 +838,10 @@ class MainWindow(QMainWindow):
 
     # ── Generierung & Abbruch ───────────────────────────────────────────────
 
-    def _start_generation(self):
+    def _collect_context(self) -> dict:
+        """Collects the configuration and template options into a context dictionary."""
         name = self.name_input.text().strip()
-        base_path_str = self.path_input.text().strip()
-        template_id = self.template_combo.currentData()
-
-        if not name or not base_path_str or not template_id:
-            self.log_view.append("Fehler: Bitte Name, Pfad und Vorlage angeben.")
-            self.statusBar().showMessage("Fehler: Unvollständige Eingaben.", 3000)
-            return
-
-        if not _VALID_NAME.match(name):
-            self.log_view.append(
-                "Fehler: Ungültiger Projektname. "
-                "Nur Buchstaben, Ziffern, - und _ erlaubt, muss mit Buchstabe beginnen."
-            )
-            self.statusBar().showMessage("Fehler: Ungültiger Projektname.", 3000)
-            return
-
-        target_dir = Path(base_path_str) / name
-        if target_dir.exists() and any(target_dir.iterdir()):
-            self.log_view.append(f"Fehler: '{target_dir}' existiert bereits und ist nicht leer.")
-            QMessageBox.warning(
-                self,
-                "Zielordner nicht leer",
-                f"Das Verzeichnis '{target_dir}' existiert bereits und ist nicht leer.\n"
-                "Bitte wähle einen anderen Namen oder leere das Verzeichnis."
-            )
-            return
-
+        template_id = self.template_combo.currentData() or ""
         template_meta = self.template_manager.templates.get(template_id, {})
         license_val = self.license_combo.currentText()
         if license_val == "Keine":
@@ -851,12 +874,67 @@ class MainWindow(QMainWindow):
         for opt_id, combo in self.option_selects.items():
             context[opt_id] = combo.currentData()
 
+        return context
+
+    def _show_preview(self):
+        """Generates an in-memory virtual preview and opens the preview dialog."""
+        template_id = self.template_combo.currentData()
+        if not template_id:
+            QMessageBox.warning(self, "Vorlage fehlt", "Bitte wähle zuerst eine Vorlage aus.")
+            return
+
+        context = self._collect_context()
+        if not context["project_name"]:
+            context["project_name"] = "preview_project"
+            context["project_slug"] = "preview_project"
+
+        try:
+            files_map = self.generator.preview(template_id, context)
+            dialog = PreviewDialog(files_map, self)
+            dialog.exec()
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Fehler bei der Vorschau", f"Konnte Vorschau nicht berechnen:\n{e}"
+            )
+
+    def _start_generation(self):
+        name = self.name_input.text().strip()
+        base_path_str = self.path_input.text().strip()
+        template_id = self.template_combo.currentData()
+
+        if not name or not base_path_str or not template_id:
+            self.log_view.append("Fehler: Bitte Name, Pfad und Vorlage angeben.")
+            self.statusBar().showMessage("Fehler: Unvollständige Eingaben.", 3000)
+            return
+
+        if not _VALID_NAME.match(name):
+            self.log_view.append(
+                "Fehler: Ungültiger Projektname. "
+                "Nur Buchstaben, Ziffern, - und _ erlaubt, muss mit Buchstabe beginnen."
+            )
+            self.statusBar().showMessage("Fehler: Ungültiger Projektname.", 3000)
+            return
+
+        target_dir = Path(base_path_str) / name
+        if target_dir.exists() and any(target_dir.iterdir()):
+            self.log_view.append(f"Fehler: '{target_dir}' existiert bereits und ist nicht leer.")
+            QMessageBox.warning(
+                self,
+                "Zielordner nicht leer",
+                f"Das Verzeichnis '{target_dir}' existiert bereits und ist nicht leer.\n"
+                "Bitte wähle einen anderen Namen oder leere das Verzeichnis."
+            )
+            return
+
+        context = self._collect_context()
+
         # Update UI states for running generation
         self.run_btn.setEnabled(False)
+        self.preview_btn.setEnabled(False)
         self.cancel_btn.setVisible(True)
         self.cancel_btn.setEnabled(True)
         self.cancel_btn.setText("✖  Abbrechen")
-        self.open_btn.setVisible(False)
+        self.launcher_widget.setVisible(False)
         self.log_view.clear()
         self.log_view.append(f"Starte Initialisierung von '{name}'...")
         self.statusBar().showMessage(f"Erstelle Projekt '{name}'...", 0)
@@ -877,11 +955,12 @@ class MainWindow(QMainWindow):
     def _on_generation_finished(self, ok: bool, target_dir_str: str, was_cancelled: bool):
         """Handles completion of generation worker."""
         self.run_btn.setEnabled(self.tool_statuses.get("git", False))
+        self.preview_btn.setEnabled(True)
         self.cancel_btn.setVisible(False)
 
         if was_cancelled:
             self.statusBar().showMessage("Vorgang abgebrochen.", 4000)
-            self.open_btn.setVisible(False)
+            self.launcher_widget.setVisible(False)
             QMessageBox.information(
                 self,
                 "Vorgang abgebrochen",
@@ -890,7 +969,7 @@ class MainWindow(QMainWindow):
         elif ok:
             self._last_target_dir = target_dir_str
             self.log_view.append(f"\n✔ Projekt erfolgreich erstellt: {target_dir_str}")
-            self.open_btn.setVisible(True)
+            self.launcher_widget.setVisible(True)
             self.statusBar().showMessage(f"Projekt erfolgreich erstellt in {target_dir_str}", 6000)
             QMessageBox.information(
                 self,
@@ -900,9 +979,9 @@ class MainWindow(QMainWindow):
         else:
             self.log_view.append("\n✖ Initialisierung fehlgeschlagen. Siehe Log oben.")
             self.statusBar().showMessage("Fehler bei der Initialisierung.", 5000)
-            self.open_btn.setVisible(False)
+            self.launcher_widget.setVisible(False)
 
-    # ── Dateimanager / Explorer ─────────────────────────────────────────────
+    # ── Dateimanager & Launcher ─────────────────────────────────────────────
 
     def _open_in_explorer(self):
         if not self._last_target_dir:
@@ -913,9 +992,81 @@ class MainWindow(QMainWindow):
             return
         self._open_directory(path)
 
+    def _open_in_vscode(self):
+        if not self._last_target_dir:
+            return
+        code_bin = shutil.which("code")
+        if not code_bin:
+            QMessageBox.warning(
+                self,
+                "VS Code nicht gefunden",
+                "Der Befehl 'code' wurde nicht in Ihrem System-PATH gefunden.\n"
+                "Stellen Sie sicher, dass VS Code installiert und im PATH registriert ist."
+            )
+            return
+        try:
+            subprocess.Popen([code_bin, self._last_target_dir], shell=(sys.platform == "win32"))
+            self.statusBar().showMessage("In VS Code geöffnet.", 3000)
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Konnte VS Code nicht starten:\n{e}")
+
+    def _open_in_cursor(self):
+        if not self._last_target_dir:
+            return
+        cursor_bin = shutil.which("cursor")
+        if not cursor_bin:
+            QMessageBox.warning(
+                self,
+                "Cursor nicht gefunden",
+                "Der Befehl 'cursor' wurde nicht in Ihrem System-PATH gefunden.\n"
+                "Stellen Sie sicher, dass Cursor installiert und im PATH registriert ist."
+            )
+            return
+        try:
+            subprocess.Popen([cursor_bin, self._last_target_dir], shell=(sys.platform == "win32"))
+            self.statusBar().showMessage("In Cursor geöffnet.", 3000)
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Konnte Cursor nicht starten:\n{e}")
+
+    def _open_in_terminal(self):
+        if not self._last_target_dir:
+            return
+        target_dir = self._last_target_dir
+        try:
+            if sys.platform == "win32":
+                if shutil.which("wt"):
+                    subprocess.Popen(["wt", "-d", target_dir])
+                elif shutil.which("powershell"):
+                    subprocess.Popen(
+                        ["powershell", "-NoExit", "-Command", f"Set-Location -LiteralPath '{target_dir}'"]
+                    )
+                else:
+                    subprocess.Popen(["cmd.exe", "/k", f"cd /d {target_dir}"])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", "-a", "Terminal", target_dir])
+            else:
+                for term in ["x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "xterm"]:
+                    if shutil.which(term):
+                        subprocess.Popen([term, "--working-directory", target_dir])
+                        break
+            self.statusBar().showMessage("Terminal geöffnet.", 3000)
+        except Exception as e:
+            QMessageBox.critical(self, "Fehler", f"Konnte Terminal nicht öffnen:\n{e}")
+
     def _open_directory(self, path: Path):
         """Opens a folder in the native platform file manager."""
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    # ── Dialoge für Retrofit & Template-Erstellung ──────────────────────────
+
+    def _show_retrofit_dialog(self):
+        dialog = RetrofitDialog(self.template_manager, self)
+        dialog.exec()
+
+    def _show_create_template_dialog(self):
+        dialog = CreateTemplateDialog(self.template_manager, self)
+        dialog.exec()
+        self._reload_templates()
 
     # ── Über-Dialog ─────────────────────────────────────────────────────────
 
@@ -928,12 +1079,14 @@ class MainWindow(QMainWindow):
             "<p><b>Funktionen:</b></p>"
             "<ul>"
             "<li>Unterstützt Python (CLI, FastAPI, GUI), Rust (CLI, GUI) und Node/TypeScript</li>"
-            "<li>Optimierte Pipeline: uv init → uv venv → git init mit Git-Hooks (SemVer, Changelog)</li>"
+            "<li>Optimierte Pipeline: uv init → uv venv → git init mit Git-Hooks (SemVer, Conventional Commits)</li>"
             "<li>Modulare Generierung von Coding-Agent-Regeln und Skills (.agents/ & AGENTS.md)</li>"
-            "<li>Konfigurierbare Autoren-, Lizenz- und Script-Metadaten</li>"
-            "<li>Vollbildmodus (F11) und Fenstermodus mit Theme-Unterstützung</li>"
-            "<li>Persistente Einstellungen mit QSettings</li>"
-            "<li>Abbruch laufender Erstellungen</li>"
+            "<li>Interaktive Live-Vorschau: Virtuelle Dateistruktur und Syntax-Inhalte vor der Erstellung prüfen</li>"
+            "<li>IDE- & Quickstart-Launcher: Direktes Öffnen in VS Code, Cursor oder im Terminal</li>"
+            "<li>Retrofit-Modus: Git-Hooks & Agent-Regeln nachträglich in bestehende Repos einbinden</li>"
+            "<li>Vorlagen-Ersteller: Eigene Vorlagen direkt aus bestehenden Projekten ableiten</li>"
+            "<li>Headless CLI-Modus (--list, --preview, --gui)</li>"
+            "<li>Vollbildmodus (F11) und Fenstermodus mit Dark-Theme</li>"
             "</ul>"
             "<p>© 2026 Daniel Rösch</p>"
         )

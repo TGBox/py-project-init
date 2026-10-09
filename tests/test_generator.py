@@ -117,6 +117,86 @@ class TestTemplateManager(unittest.TestCase):
             self.assertIn('lint = "ruff check ."', pyproject_content)
             self.assertIn('format = "ruff format ."', pyproject_content)
 
+    def test_preview_simulation(self):
+        """Verifies in-memory preview simulates generation without touching disk."""
+        context = {
+            "project_name": "preview_project",
+            "project_slug": "preview_project",
+            "description": "Preview test description",
+            "author": "Preview Tester",
+            "author_email": "preview@example.com",
+            "license": "MIT",
+            "custom_scripts": {"start": "python main.py"},
+            "docker": False,
+            "github_actions": True,
+            "vscode": True,
+            "enable_git_hooks": True,
+            "selected_git_hooks": ["pre-commit", "commit-msg"],
+            "enable_agent_configs": True,
+            "selected_agent_rules": ["general_guidelines"],
+            "selected_agent_skills": ["code-review"],
+        }
+        files_map = self.manager.preview("python-cli", context)
+        self.assertIn("pyproject.toml", files_map)
+        self.assertIn(".git/hooks/pre-commit", files_map)
+        self.assertIn(".git/hooks/commit-msg", files_map)
+        self.assertIn(".agents/rules/general_guidelines.md", files_map)
+        self.assertIn("AGENTS.md", files_map)
+
+        # Check rendered content in preview
+        pyproject_preview = files_map["pyproject.toml"]["content"]
+        self.assertIn("preview_project", pyproject_preview)
+        self.assertIn("Preview Tester", pyproject_preview)
+
+    def test_retrofit_functionality(self):
+        """Verifies retrofitting hooks and agent configs into an existing project."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj_dir = Path(temp_dir) / "existing_proj"
+            proj_dir.mkdir()
+            (proj_dir / "app.py").write_text("print('hello')", encoding="utf-8")
+
+            # 1. Retrofit hooks
+            self.manager.retrofit_hooks(proj_dir, ["pre-commit", "commit-msg"])
+            self.assertTrue((proj_dir / ".git").exists())
+            self.assertTrue((proj_dir / ".git" / "hooks" / "pre-commit").exists())
+            self.assertTrue((proj_dir / ".git" / "hooks" / "commit-msg").exists())
+
+            # 2. Retrofit agent configs
+            self.manager.retrofit_agent_configs(proj_dir, ["general_guidelines"], ["code-review"])
+            self.assertTrue((proj_dir / ".agents" / "rules" / "general_guidelines.md").exists())
+            self.assertTrue((proj_dir / ".agents" / "skills" / "code-review").exists())
+            self.assertTrue((proj_dir / "AGENTS.md").exists())
+
+    def test_create_template_from_project(self):
+        """Verifies creating a reusable template from an existing folder."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            src_dir = Path(temp_dir) / "my_existing_service"
+            src_dir.mkdir()
+            (src_dir / "README.md").write_text("# my_existing_service\nSome info", encoding="utf-8")
+            (src_dir / "pyproject.toml").write_text('[project]\nname = "my_existing_service"\nversion = "0.1.0"', encoding="utf-8")
+            (src_dir / ".venv").mkdir()  # should be ignored
+
+            out_templates_dir = Path(temp_dir) / "custom_templates"
+            out_templates_dir.mkdir()
+
+            tpl_dir = self.manager.create_template_from_project(
+                source_dir=src_dir,
+                output_dir=out_templates_dir,
+                template_name="My Service Template",
+                language="Python",
+                description="Exported template test"
+            )
+
+            self.assertTrue((tpl_dir / "template.yaml").exists())
+            self.assertTrue((tpl_dir / "README.md.j2").exists())
+            self.assertTrue((tpl_dir / "pyproject.toml.j2").exists())
+            self.assertFalse((tpl_dir / ".venv").exists())  # Ignored
+
+            # Verify placeholder replacement
+            readme_j2 = (tpl_dir / "README.md.j2").read_text(encoding="utf-8")
+            self.assertIn("{{ project_name }}", readme_j2)
+
 
 if __name__ == "__main__":
     unittest.main()
+

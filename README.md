@@ -8,6 +8,23 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
 
 - **Moderne Qt-Oberfläche (Dark Mode):** Elegantes dunkles Design mit Statusanzeigen, Echtzeit-Validierung und interaktiven Hilfetexten in einer responsiven Scroll-Ansicht.
 - **Vollbild- & Fenstermodus:** Nahtloses Umschalten zwischen Standard- und Vollbildansicht jederzeit per Menü (**Ansicht → Vollbildmodus**) oder Taste `F11`.
+- **Interaktive Live-Vorschau (Virtuelles Rendern):**
+  - Prüft vor dem Schreiben auf die Festplatte den kompletten virtuellen Dateibaum und gerenderte Dateiinhalte.
+  - Aufrufbar per Button **👁 Live-Vorschau**, Tastaturkürzel `Strg + P` oder über das Menü **Werkzeuge**.
+- **IDE- & Quickstart-Launcher:**
+  - Nach erfolgreicher Projekterstellung stehen 1-Klick-Buttons zur Verfügung:
+    - **💻 VS Code:** Öffnet das Projekt direkt in Visual Studio Code (`code <zielordner>`).
+    - **⚡ Cursor:** Öffnet das Projekt im AI-Editor Cursor (`cursor <zielordner>`).
+    - **🖥 Terminal:** Öffnet ein Terminalfenster direkt im Projektordner (Windows Terminal, PowerShell oder Shell).
+    - **📂 Explorer:** Öffnet den Zielordner im nativen Dateimanager.
+- **Retrofit-Modus für bestehende Repositories:**
+  - Bestehende Codebasen können nachträglich mit den standardisierten Git-Hooks und Agent-Konfigurationen ausgestattet werden.
+  - Über das Menü **Werkzeuge → Bestehendes Projekt nachrüsten...**.
+- **Vorlagen-Ersteller (Template Creator):**
+  - Erstellt aus einem bestehenden Projektordner automatisch eine neue, wiederverwendbare Jinja2-Vorlage mit generierter `template.yaml`.
+  - Über das Menü **Vorlagen → Neue Vorlage aus bestehendem Projekt erstellen...**.
+- **Headless CLI-Modus:**
+  - Vollständige Steuerung über die Kommandozeile für Scripting und CI/CD ohne GUI-Zwang.
 - **System-Tool-Prüfung:** Live-Erkennung verfügbarer CLI-Werkzeuge (`git`, `uv`, `cargo`, `npm`) im System-PATH.
 - **Echtzeit-Validierung:** Sofortige Prüfung des Projektnamens auf Konventionen (nur Buchstaben, Ziffern, `-` und `_`, muss mit einem Buchstaben beginnen).
 - **Optimierte Pipeline (`uv init` → `uv venv` → `git init`):**
@@ -35,7 +52,6 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
   - Konfigurierbare Skript-Tabelle (z. B. `format = ruff format .`), die direkt in `pyproject.toml` oder `package.json` geschrieben wird.
   - Dauerhafte Speicherung über `QSettings`.
 - **Asynchrone Generierung mit Abbruch:** Hintergrund-Ausführung im separaten Thread; kann jederzeit über den **✖ Abbrechen**-Button sicher gestoppt werden.
-- **Direktzugriff:** Nach erfolgreicher Erstellung kann der Zielordner mit einem Klick im System-Dateimanager geöffnet werden.
 
 ---
 
@@ -77,18 +93,30 @@ Mit `uv`:
 uv sync
 ```
 
-### 3. Anwendung starten
+### 3. Anwendung starten (GUI oder CLI)
 
-Über den Skript-Einstiegspunkt:
+**Grafische Oberfläche starten:**
 
 ```bash
 uv run py-project-init
+# oder explizit:
+uv run py-project-init --gui
 ```
 
-Oder direkt als Python-Modul:
+**Headless CLI-Modus (Kommandozeile):**
 
 ```bash
-uv run python -m py_project_init
+# Verfügbare Vorlagen auflisten
+uv run py-project-init --list
+
+# Virtuelle Vorschau generieren (ohne Dateien zu schreiben)
+uv run py-project-init mein-projekt -t python-cli --preview
+
+# Projekt direkt via CLI initialisieren
+uv run py-project-init mein-service -t python-fastapi -p /pfad/zu/projekten
+
+# Projekt mit Autor und Lizenz initialisieren
+uv run py-project-init my-tool -t rust-cli --author "Max Mustermann" --email "max@example.com" --license MIT
 ```
 
 ---
@@ -146,6 +174,7 @@ hooks:
 | Tastenkombination | Aktion |
 | :--- | :--- |
 | **F11** | Vollbildmodus umschalten (Vollbild ↔ Fenstermodus) |
+| **Strg + P** | Virtuelle Live-Vorschau öffnen |
 | **Strg + O** | Basis-Zielordner auswählen |
 | **Strg + R** | Vorlagen & Assets neu einlesen |
 | **Strg + L** | Protokollfenster (Log) leeren |

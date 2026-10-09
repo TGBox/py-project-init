@@ -353,4 +353,44 @@ QHeaderView::section {
     border: 1px solid #292e42;
     font-weight: 600;
 }
+
+/* Tree Widget */
+QTreeWidget {
+    background-color: #1a1b26;
+    color: #c0caf5;
+    border: 1px solid #3b4261;
+    border-radius: 6px;
+    padding: 4px;
+}
+
+QTreeWidget::item {
+    padding: 4px 6px;
+    border-radius: 4px;
+}
+
+QTreeWidget::item:hover {
+    background-color: #24283b;
+}
+
+QTreeWidget::item:selected {
+    background-color: #3d59a1;
+    color: #ffffff;
+}
+
+/* Splitter */
+QSplitter::handle {
+    background-color: #292e42;
+    width: 3px;
+    height: 3px;
+}
+
+QSplitter::handle:hover {
+    background-color: #7aa2f7;
+}
+
+/* Dialogs */
+QDialog {
+    background-color: #1a1b26;
+    color: #c0caf5;
+}
 """

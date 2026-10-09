@@ -1,3 +1,4 @@
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -362,6 +363,244 @@ class TemplateManager:
 
         (target_dir / "AGENTS.md").write_text("\n".join(agents_md_lines), encoding="utf-8")
         log_callback("AGENTS.md im Projektstamm generiert.")
+
+    def preview(self, template_id: str, context: dict) -> dict[str, dict]:
+        """Generates an in-memory simulation of the resulting project structure and files."""
+        template_meta = self.templates.get(template_id)
+        if not template_meta:
+            raise ValueError(f"Template '{template_id}' nicht gefunden.")
+
+        template_path: Path = template_meta["path"]
+        env = Environment(loader=FileSystemLoader(template_path))
+        file_conditions: list[dict] = template_meta.get("file_conditions", [])
+        files_map: dict[str, dict] = {}
+
+        # 1. Pre-init generated items
+        pre_init_hooks = template_meta.get("hooks", {}).get("pre_init", [])
+        has_uv_init = any("uv" in cmd and "init" in cmd for cmd in pre_init_hooks)
+        has_uv_venv = any("uv" in cmd and "venv" in cmd for cmd in pre_init_hooks)
+
+        if has_uv_venv:
+            files_map[".venv"] = {"is_dir": True, "content": None, "source": "uv venv"}
+        if has_uv_init:
+            files_map[".python-version"] = {"is_dir": False, "content": "3.12\n", "source": "uv init"}
+            files_map[".gitignore"] = {
+                "is_dir": False,
+                "content": ".venv/\n__pycache__/\n*.pyc\n.ruff_cache/\n.pytest_cache/\ndist/\nbuild/\n",
+                "source": "uv init"
+            }
+
+        # 2. Git repository & hooks
+        files_map[".git"] = {"is_dir": True, "content": None, "source": "git init"}
+        if context.get("enable_git_hooks", False):
+            files_map[".git/hooks"] = {"is_dir": True, "content": None, "source": "git hooks"}
+            for hook_id in context.get("selected_git_hooks", []):
+                hook_file = self.hooks_dir / hook_id
+                hook_content = hook_file.read_text(encoding="utf-8") if hook_file.is_file() else "# Hook script"
+                files_map[f".git/hooks/{hook_id}"] = {
+                    "is_dir": False,
+                    "content": hook_content,
+                    "source": f"Hook '{hook_id}'"
+                }
+
+        # 3. Agent configs
+        if context.get("enable_agent_configs", False):
+            files_map[".agents"] = {"is_dir": True, "content": None, "source": "Agenten-Setup"}
+            files_map[".agents/rules"] = {"is_dir": True, "content": None, "source": "Agenten-Regeln"}
+            files_map[".agents/skills"] = {"is_dir": True, "content": None, "source": "Agenten-Skills"}
+
+            manifest = self.get_agent_manifest()
+            selected_rules = context.get("selected_agent_rules", [])
+            active_rules_info: list[dict] = []
+            for rule in manifest.get("rules", []):
+                if rule.get("id") in selected_rules:
+                    src_file = self.agent_configs_dir / rule.get("file", "")
+                    content = src_file.read_text(encoding="utf-8") if src_file.is_file() else ""
+                    files_map[f".agents/rules/{src_file.name}"] = {
+                        "is_dir": False,
+                        "content": content,
+                        "source": f"Regel: {rule.get('name')}"
+                    }
+                    active_rules_info.append(rule)
+
+            selected_skills = context.get("selected_agent_skills", [])
+            active_skills_info: list[dict] = []
+            for skill in manifest.get("skills", []):
+                if skill.get("id") in selected_skills:
+                    s_folder = skill.get("folder", "")
+                    src_skill_file = self.agent_configs_dir / s_folder / "SKILL.md"
+                    content = src_skill_file.read_text(encoding="utf-8") if src_skill_file.is_file() else ""
+                    files_map[f".agents/skills/{Path(s_folder).name}/SKILL.md"] = {
+                        "is_dir": False,
+                        "content": content,
+                        "source": f"Skill: {skill.get('name')}"
+                    }
+                    active_skills_info.append(skill)
+
+            # AGENTS.md
+            agents_md_lines = [
+                "# Agent Workspace Configuration",
+                "",
+                f"Dieses Projekt ('{context.get('project_name', '')}') enthält projektspezifische Richtlinien und Skills in `.agents/`.",
+                "",
+                "## Aktive Regeln",
+            ]
+            for r in active_rules_info:
+                agents_md_lines.append(f"- **{r.get('name')}**: {r.get('description')}")
+            agents_md_lines.extend(["", "## Aktive Skills"])
+            for s in active_skills_info:
+                agents_md_lines.append(f"- **{s.get('name')}**: {s.get('description')}")
+            files_map["AGENTS.md"] = {
+                "is_dir": False,
+                "content": "\n".join(agents_md_lines) + "\n",
+                "source": "AGENTS.md"
+            }
+
+        # 4. Template files
+        for root, dirs, files in template_path.walk():
+            rel_path = root.relative_to(template_path)
+            if "template.yaml" in files:
+                files.remove("template.yaml")
+
+            rendered_dir_str = env.from_string(str(rel_path)).render(context).replace("\\", "/")
+            if rendered_dir_str and rendered_dir_str != ".":
+                files_map[rendered_dir_str] = {"is_dir": True, "content": None, "source": "Template"}
+
+            for file in files:
+                if not self._should_include(rel_path, file, file_conditions, context):
+                    continue
+
+                dest_filename = file[:-3] if file.endswith(".j2") else file
+                dest_filename = env.from_string(dest_filename).render(context)
+                full_rel_path = (Path(rendered_dir_str) / dest_filename).as_posix() if rendered_dir_str and rendered_dir_str != "." else dest_filename
+
+                if file.endswith(".j2"):
+                    try:
+                        template = env.get_template(str(rel_path / file).replace("\\", "/"))
+                        rendered_content = template.render(context)
+                    except Exception as e:
+                        rendered_content = f"# Fehler beim Rendern: {e}"
+
+                    if dest_filename == ".gitignore" and ".gitignore" in files_map:
+                        rendered_content = self._merge_gitignore(files_map[".gitignore"]["content"] or "", rendered_content)
+
+                    files_map[full_rel_path] = {
+                        "is_dir": False,
+                        "content": rendered_content,
+                        "source": f"Template ({file})"
+                    }
+                else:
+                    src_file = root / file
+                    try:
+                        content = src_file.read_text(encoding="utf-8")
+                    except UnicodeDecodeError:
+                        content = f"[Binärdatei: {src_file.stat().st_size} Bytes]"
+
+                    if dest_filename == ".gitignore" and ".gitignore" in files_map:
+                        content = self._merge_gitignore(files_map[".gitignore"]["content"] or "", content)
+
+                    files_map[full_rel_path] = {
+                        "is_dir": False,
+                        "content": content,
+                        "source": f"Template ({file})"
+                    }
+
+        return files_map
+
+    def retrofit_hooks(self, target_dir: Path, selected_hooks: list[str], log_callback=print):
+        """Retrofits git hooks into an existing project folder."""
+        self._init_git_repo(target_dir, log_callback)
+        self._install_git_hooks(target_dir, selected_hooks, log_callback)
+
+    def retrofit_agent_configs(
+        self,
+        target_dir: Path,
+        selected_rules: list[str],
+        selected_skills: list[str],
+        log_callback=print
+    ):
+        """Retrofits agent rules, skills, and AGENTS.md into an existing project folder."""
+        self._install_agent_configs(target_dir, selected_rules, selected_skills, log_callback)
+
+    def create_template_from_project(
+        self,
+        source_dir: Path,
+        output_dir: Path,
+        template_name: str,
+        language: str,
+        description: str,
+        log_callback=print
+    ) -> Path:
+        """Derives a new reusable template from an existing project folder."""
+        if not source_dir.is_dir():
+            raise ValueError(f"Quellverzeichnis '{source_dir}' existiert nicht.")
+
+        slug = re.sub(r"[^a-zA-Z0-9_-]", "-", template_name.lower().strip())
+        target_tpl_dir = output_dir / slug
+        target_tpl_dir.mkdir(parents=True, exist_ok=True)
+
+        ignored_names = {
+            ".git", ".venv", "venv", "__pycache__", "node_modules",
+            "target", "dist", "build", ".idea", ".vscode"
+        }
+
+        source_name = source_dir.name
+        log_callback(f"Kopiere Projektdateien von '{source_dir}' nach '{target_tpl_dir}'...")
+
+        for root, dirs, files in source_dir.walk():
+            dirs[:] = [d for d in dirs if d not in ignored_names]
+            rel_root = root.relative_to(source_dir)
+            dest_root = target_tpl_dir / rel_root
+            dest_root.mkdir(parents=True, exist_ok=True)
+
+            for file in files:
+                if file in {".DS_Store", "Thumbs.db"}:
+                    continue
+                src_file = root / file
+                dest_file = dest_root / file
+
+                try:
+                    text = src_file.read_text(encoding="utf-8")
+                    param_text = text.replace(source_name, "{{ project_name }}")
+                    param_text = param_text.replace(source_name.lower().replace("-", "_"), "{{ project_slug }}")
+
+                    if file in {"pyproject.toml", "package.json", "Cargo.toml", "README.md"}:
+                        dest_file = dest_root / f"{file}.j2"
+
+                    dest_file.write_text(param_text, encoding="utf-8")
+                except UnicodeDecodeError:
+                    shutil.copy2(src_file, dest_file)
+
+        tpl_config = {
+            "name": template_name,
+            "language": language or "Universal",
+            "description": description or f"Vorlage basierend auf {source_name}",
+            "options": [
+                {"id": "github_actions", "label": "CI-Workflow einbinden", "default": True}
+            ],
+            "hooks": {}
+        }
+        lang_lower = language.lower()
+        if lang_lower == "python":
+            tpl_config["hooks"] = {
+                "pre_init": [["uv", "init"], ["uv", "venv"]],
+                "post_create": [["uv", "sync"]]
+            }
+        elif lang_lower in {"rust", "cargo"}:
+            tpl_config["hooks"] = {
+                "post_create": [["cargo", "check"]]
+            }
+        elif lang_lower in {"typescript", "javascript", "node"}:
+            tpl_config["hooks"] = {
+                "post_create": [["npm", "install"]]
+            }
+
+        with open(target_tpl_dir / "template.yaml", "w", encoding="utf-8") as f:
+            yaml.safe_dump(tpl_config, f, allow_unicode=True, sort_keys=False)
+
+        log_callback(f"Vorlage '{template_name}' erfolgreich in '{target_tpl_dir}' erstellt.")
+        self.reload_templates()
+        return target_tpl_dir
 
     def _commit_initial(self, target_dir: Path, log_callback, is_cancelled=None):
         """Stages all files and creates initial commit using --no-verify."""
