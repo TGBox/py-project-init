@@ -2,7 +2,8 @@
 
 ## SemVer v2.0.1
 
-- 2026-10-10 (059c2d9): fix(changelog): add newly generated changelog file
+- 2026-10-10 (399bf09): fix(hooks): optimize hook workflow to prevent a semver bump when a commit message was configured incorrectly
+- 2026-10-10 (f030481): fix(changelog): add newly generated changelog file
 
 ## SemVer v2.0.0
 

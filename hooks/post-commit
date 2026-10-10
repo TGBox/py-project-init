@@ -1,13 +1,169 @@
 #!/usr/bin/env bash
+set -e
 
+# Abbruch, wenn der Aufruf durch den post-commit Hook (Amend) ausgelöst wurde
 if [ "$GIT_CHANGELOG_RUNNING" = "1" ]; then
   exit 0
 fi
 
-python3 - << 'EOF'
+PYTHON_BIN="python3"
+if ! command -v python3 >/dev/null 2>&1 && command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+fi
+
+# -----------------------------------------------------------------------------
+# 1. Interaktiver SemVer Bump
+# -----------------------------------------------------------------------------
+BUMP=""
+
+# Letzte Commit-Nachricht ermitteln
+LAST_COMMIT_MSG=$(git log -1 --pretty=%B 2>/dev/null || echo "")
+FIRST_LINE=$(echo "$LAST_COMMIT_MSG" | head -n 1 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+# Empfohlenen Bump anhand von Conventional Commits ableiten
+DEFAULT_CHOICE="s"
+RECOMMENDED_NAME="Überspringen"
+
+if echo "$LAST_COMMIT_MSG" | grep -Eq 'BREAKING CHANGE' || echo "$FIRST_LINE" | grep -Eq '^[a-zA-Z0-9_-]+(\([^)]+\))?!:'; then
+  DEFAULT_CHOICE="3"
+  RECOMMENDED_NAME="Major"
+elif echo "$FIRST_LINE" | grep -Eq '^feat(\([^)]+\))?:'; then
+  DEFAULT_CHOICE="2"
+  RECOMMENDED_NAME="Minor"
+elif echo "$FIRST_LINE" | grep -Eq '^(fix|perf)(\([^)]+\))?:'; then
+  DEFAULT_CHOICE="1"
+  RECOMMENDED_NAME="Patch"
+fi
+
+# Interaktivitätsprüfung: TTY verfügbar und kein automatisierter Modus
+INTERACTIVE=0
+if [ -z "$CI" ] && [ "${GIT_HOOKS_NON_INTERACTIVE:-0}" != "1" ]; then
+  if [ "${GIT_HOOKS_FORCE_INTERACTIVE:-0}" = "1" ]; then
+    INTERACTIVE=1
+  elif [ -t 0 ] || [ -t 1 ]; then
+    if [ -e /dev/tty ]; then
+      exec < /dev/tty 2>/dev/null || true
+      INTERACTIVE=1
+    elif [ -t 0 ]; then
+      INTERACTIVE=1
+    fi
+  fi
+fi
+
+if [ "$INTERACTIVE" = "1" ]; then
+  # Aktuelle Version ermitteln
+  CURRENT_VERSION=""
+  if [ -f "pyproject.toml" ]; then
+    CURRENT_VERSION=$("$PYTHON_BIN" -c "
+import re
+try:
+    with open('pyproject.toml', 'r', encoding='utf-8') as f:
+        m = re.search(r'version\s*=\s*\"(\d+\.\d+\.\d+)\"', f.read())
+        if m:
+            print(f'{m.group(1)}.{m.group(2)}.{m.group(3)}')
+except Exception:
+    pass
+" 2>/dev/null || true)
+  elif [ -f "package.json" ]; then
+    CURRENT_VERSION=$("$PYTHON_BIN" -c "
+import json
+try:
+    with open('package.json', 'r', encoding='utf-8') as f:
+        print(json.load(f).get('version', ''))
+except Exception:
+    pass
+" 2>/dev/null || true)
+  fi
+
+  echo "----------------------------------------"
+  if [ -n "$CURRENT_VERSION" ]; then
+    echo "Aktuelle Version: v$CURRENT_VERSION"
+  fi
+  if [ -n "$FIRST_LINE" ]; then
+    echo "Commit: $FIRST_LINE"
+  fi
+  echo "Empfohlener Bump: $RECOMMENDED_NAME ($DEFAULT_CHOICE)"
+  echo "----------------------------------------"
+  echo "SemVer Bump auswählen:"
+  echo "1) Patch"
+  echo "2) Minor"
+  echo "3) Major"
+  echo "s) Überspringen (keine Änderung)"
+  echo "----------------------------------------"
+  read -r -p "Auswahl [1/2/3/s] (Standard: $DEFAULT_CHOICE): " choice || choice="$DEFAULT_CHOICE"
+  [ -z "$choice" ] && choice="$DEFAULT_CHOICE"
+
+  case "$choice" in
+    1) BUMP="patch" ;;
+    2) BUMP="minor" ;;
+    3) BUMP="major" ;;
+    s|S|"") echo "Version unverändert gelassen." ;;
+    *) echo "Ungültige Auswahl, Version unverändert gelassen." ;;
+  esac
+fi
+
+if [ -n "$BUMP" ]; then
+  # Python-Projekt (pyproject.toml & uv.lock)
+  if [ -f "pyproject.toml" ]; then
+    "$PYTHON_BIN" -c "
+import re, sys
+
+part = '$BUMP'
+file = 'pyproject.toml'
+
+with open(file, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+m = re.search(r'version\s*=\s*\"(\d+)\.(\d+)\.(\d+)\"', content)
+if m:
+    major, minor, patch = map(int, m.groups())
+    if part == 'major':
+        major += 1
+        minor = 0
+        patch = 0
+    elif part == 'minor':
+        minor += 1
+        patch = 0
+    elif part == 'patch':
+        patch += 1
+
+    new_ver = f'{major}.{minor}.{patch}'
+    content = re.sub(r'version\s*=\s*\"\d+\.\d+\.\d+\"', f'version = \"{new_ver}\"', content, count=1)
+
+    with open(file, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+    print(f'pyproject.toml: {m.group(1)}.{m.group(2)}.{m.group(3)} -> {new_ver}')
+"
+    git add pyproject.toml
+
+    if [ -f "uv.lock" ] && command -v uv >/dev/null 2>&1; then
+      uv lock
+      git add uv.lock
+      echo "uv.lock aktualisiert und gestaged."
+    fi
+  fi
+
+  # Node-Projekt (package.json)
+  if [ -f "package.json" ]; then
+    if command -v npm >/dev/null 2>&1; then
+      npm version "$BUMP" --no-git-tag-version
+      git add package.json
+      if [ -f "package-lock.json" ]; then
+        git add package-lock.json
+      fi
+    fi
+  fi
+fi
+
+# -----------------------------------------------------------------------------
+# 2. Changelog-Generierung
+# -----------------------------------------------------------------------------
+"$PYTHON_BIN" - << 'EOF'
 import subprocess
 import re
 import json
+import os
 from collections import defaultdict
 
 # 1. Bestehende H1-Überschrift einlesen
@@ -59,14 +215,37 @@ def get_version_at_commit(commit_hash):
             pass
     return None
 
+def get_current_working_version():
+    for fname in ("pyproject.toml", "package.json"):
+        try:
+            if fname == "pyproject.toml" and os.path.isfile("pyproject.toml"):
+                with open("pyproject.toml", "r", encoding="utf-8") as f:
+                    m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', f.read())
+                    if m:
+                        return m.group(1)
+            elif fname == "package.json" and os.path.isfile("package.json"):
+                with open("package.json", "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if "version" in data:
+                        return str(data["version"])
+        except Exception:
+            pass
+    return None
+
 # 3. Commits den jeweiligen Versionen zuordnen
 version_order = []
 version_commits = defaultdict(list)
 current_ver = None
+working_ver = get_current_working_version()
 
-for c in commits:
+for i, c in enumerate(commits):
+    is_latest = (i == len(commits) - 1)
     touched = any(f in ("pyproject.toml", "package.json") for f in c["files"])
-    if current_ver is None or touched:
+    
+    if is_latest and working_ver:
+        # Neueste Version aus Arbeitskopie übernehmen (falls soeben gebumpt oder vorhanden)
+        current_ver = working_ver
+    elif current_ver is None or touched:
         v = get_version_at_commit(c["hash"])
         if v:
             current_ver = v
@@ -91,9 +270,12 @@ with open("CHANGELOG.md", "w", encoding="utf-8") as f:
     f.write(output)
 EOF
 
-# 5. Bei Änderungen per Amend committen
-if ! git diff --quiet CHANGELOG.md; then
+# -----------------------------------------------------------------------------
+# 3. Bei Änderungen per Amend committen
+# -----------------------------------------------------------------------------
+git add CHANGELOG.md
+
+if ! git diff --cached --quiet; then
   export GIT_CHANGELOG_RUNNING=1
-  git add CHANGELOG.md
   git commit --no-verify --amend --no-edit
-fi
+fi

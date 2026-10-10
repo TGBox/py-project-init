@@ -159,6 +159,109 @@ class TestGitHooks(unittest.TestCase):
         )
         self.assertEqual(res_feat.returncode, 0, f"pre-push failed: {res_feat.stderr}")
 
+    def test_commit_lifecycle_no_premature_bump(self):
+        """Verifies that an invalid commit message does not prematurely bump the version in pyproject.toml."""
+        import shutil
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            # init git repo
+            subprocess.run(["git", "init"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+
+            # install hooks
+            hooks_dir = proj / ".git" / "hooks"
+            shutil.copy2(self.hooks_dir / "pre-commit", hooks_dir / "pre-commit")
+            shutil.copy2(self.hooks_dir / "commit-msg", hooks_dir / "commit-msg")
+            shutil.copy2(self.hooks_dir / "post-commit", hooks_dir / "post-commit")
+
+            # create pyproject.toml
+            pyproject = proj / "pyproject.toml"
+            pyproject.write_text('[project]\nname = "test"\nversion = "1.0.0"\n', encoding="utf-8")
+            (proj / "app.py").write_text("print('hello')", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+
+            # 1. Attempt commit with invalid commit message
+            res_bad = subprocess.run(
+                ["git", "commit", "-m", "invalid message"],
+                cwd=proj,
+                capture_output=True,
+                text=True
+            )
+            # Commit should fail
+            self.assertNotEqual(res_bad.returncode, 0)
+
+            # Check that pyproject.toml version was NOT bumped!
+            content = pyproject.read_text(encoding="utf-8")
+            self.assertIn('version = "1.0.0"', content)
+
+            # 2. Commit with valid conventional message in non-interactive mode
+            env = os.environ.copy()
+            env["GIT_HOOKS_NON_INTERACTIVE"] = "1"
+            res_good = subprocess.run(
+                ["git", "commit", "-m", "feat(core): initial working feature"],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(res_good.returncode, 0, f"Valid commit failed: {res_good.stderr}")
+            # Changelog should have been generated
+            self.assertTrue((proj / "CHANGELOG.md").exists())
+
+    def test_post_commit_interactive_bump(self):
+        """Verifies that post-commit correctly bumps version and amends commit when chosen interactively."""
+        import shutil
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+
+            hooks_dir = proj / ".git" / "hooks"
+            shutil.copy2(self.hooks_dir / "pre-commit", hooks_dir / "pre-commit")
+            shutil.copy2(self.hooks_dir / "commit-msg", hooks_dir / "commit-msg")
+            shutil.copy2(self.hooks_dir / "post-commit", hooks_dir / "post-commit")
+
+            pyproject = proj / "pyproject.toml"
+            pyproject.write_text('[project]\nname = "test"\nversion = "1.0.0"\n', encoding="utf-8")
+            (proj / "app.py").write_text("print('hello')", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+
+            # Commit with interactive simulation: input='2\n' (Minor bump)
+            env = os.environ.copy()
+            env["GIT_HOOKS_FORCE_INTERACTIVE"] = "1"
+            env.pop("GIT_HOOKS_NON_INTERACTIVE", None)
+            env.pop("CI", None)
+
+            res = subprocess.run(
+                ["git", "commit", "-m", "feat(calc): add calculator"],
+                cwd=proj,
+                input="2\n",
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(res.returncode, 0, f"Commit failed: {res.stderr}")
+
+            # Verify pyproject.toml was bumped to 1.1.0 in working tree
+            content = pyproject.read_text(encoding="utf-8")
+            self.assertIn('version = "1.1.0"', content)
+
+            # Verify commit HEAD contains the bumped version
+            head_pyproject = subprocess.check_output(
+                ["git", "show", "HEAD:pyproject.toml"],
+                cwd=proj,
+                text=True
+            )
+            self.assertIn('version = "1.1.0"', head_pyproject)
+
+            # Verify CHANGELOG.md was generated with SemVer v1.1.0
+            changelog = (proj / "CHANGELOG.md").read_text(encoding="utf-8")
+            self.assertIn("## SemVer v1.1.0", changelog)
+            self.assertIn("feat(calc): add calculator", changelog)
+
 
 if __name__ == "__main__":
     unittest.main()
+

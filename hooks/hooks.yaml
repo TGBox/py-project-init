@@ -1,6 +1,6 @@
 pre-commit:
-  name: "Pre-Commit: SemVer-Bump & Secret-Scanner"
-  description: "Blockiert gestagte Secrets (.env/Keys), Dateien >10MB und fragt nach SemVer-Bumps."
+  name: "Pre-Commit: Secret- & Size-Scanner"
+  description: "Blockiert gestagte Secrets (.env/Keys) und Dateien >10MB vor dem Commit."
   default: true
 
 commit-msg:
@@ -14,8 +14,8 @@ prepare-commit-msg:
   default: false
 
 post-commit:
-  name: "Post-Commit: Changelog-Generator"
-  description: "Generiert und aktualisiert automatisch eine linter-konforme CHANGELOG.md basierend auf Commits."
+  name: "Post-Commit: SemVer-Bump & Changelog-Generator"
+  description: "Fragt nach SemVer-Bumps, aktualisiert Lockfiles und pflegt die CHANGELOG.md per Commit-Amend."
   default: true
 
 post-checkout:
