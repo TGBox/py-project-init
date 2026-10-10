@@ -1,6 +1,6 @@
 [project]
 name = "py-project-init"
-version = "1.0.0"
+version = "2.0.0"
 description = "A python gui app to initialize new programming projects."
 readme = "README.md"
 authors = [
