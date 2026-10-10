@@ -26,6 +26,7 @@ class TestMainWindow(unittest.TestCase):
 
         # Check git hooks section - all 8 client hooks
         self.assertTrue(self.window.git_hooks_enable_cb.isChecked())
+        self.assertTrue(self.window.git_tags_enable_cb.isChecked())
         expected_hooks = [
             "pre-commit", "commit-msg", "prepare-commit-msg", "post-commit",
             "post-checkout", "post-merge", "pre-rebase", "pre-push"
@@ -64,6 +65,7 @@ class TestMainWindow(unittest.TestCase):
         dlg = RetrofitDialog(self.window.template_manager, parent=self.window)
         self.assertIsNotNone(dlg.target_path_input)
         self.assertTrue(dlg.enable_hooks_cb.isChecked())
+        self.assertTrue(dlg.enable_tags_cb.isChecked())
         self.assertTrue(dlg.enable_agent_cb.isChecked())
         self.assertIn("pre-commit", dlg.hook_checkboxes)
         self.assertIn("general_guidelines", dlg.rule_checkboxes)

@@ -2,7 +2,7 @@
 
 ## SemVer v2.0.1
 
-- 2026-10-10 (399bf09): fix(hooks): optimize hook workflow to prevent a semver bump when a commit message was configured incorrectly
+- 2026-10-10 (e9ffd5a): fix(hooks): optimize hook workflow to prevent a semver bump when a commit message was configured incorrectly
 - 2026-10-10 (f030481): fix(changelog): add newly generated changelog file
 
 ## SemVer v2.0.0
@@ -11,6 +11,7 @@
 
 ## SemVer v1.0.0
 
+- 2026-10-10 (1d84099): feat(hooks): update post-commit hook template and add new option in the setup to configure automated tagging in git
 - 2026-10-10 (bb0ac39): fix generation of the agents.md file so that it adheres to markdownlint standards
 - 2026-10-09 (4137bb3): changed agent reference skill files
 - 2026-10-09 (66bc8fa): feat(ui): optimize GUI layout with 2-column master-detail splitter, tabs, and live inspector card

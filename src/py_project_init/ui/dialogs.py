@@ -202,8 +202,15 @@ class RetrofitDialog(QDialog):
             hooks_list_layout.addWidget(cb)
             self.hook_checkboxes[h_id] = cb
 
+        self.enable_tags_cb = QCheckBox("Automatische Git-Tags bei Versionserhöhung aktivieren (hooks.autotag & push.followTags)")
+        self.enable_tags_cb.setChecked(True)
+        hooks_layout.addWidget(self.enable_tags_cb)
+
         self.enable_hooks_cb.toggled.connect(
-            lambda checked: [cb.setEnabled(checked) for cb in self.hook_checkboxes.values()]
+            lambda checked: (
+                [cb.setEnabled(checked) for cb in self.hook_checkboxes.values()],
+                self.enable_tags_cb.setEnabled(checked)
+            )
         )
         hooks_layout.addLayout(hooks_list_layout)
         layout.addWidget(hooks_group)
@@ -291,7 +298,10 @@ class RetrofitDialog(QDialog):
             selected_hooks = [h_id for h_id, cb in self.hook_checkboxes.items() if cb.isChecked()]
             if selected_hooks:
                 self.template_manager.retrofit_hooks(
-                    target_path, selected_hooks, log_callback=self.log_view.append
+                    target_path,
+                    selected_hooks,
+                    log_callback=self.log_view.append,
+                    enable_autotag=self.enable_tags_cb.isChecked()
                 )
             else:
                 self.log_view.append("Keine Git Hooks ausgewählt.")

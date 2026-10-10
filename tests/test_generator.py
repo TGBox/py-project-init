@@ -1,6 +1,7 @@
 import unittest
 import tempfile
 import shutil
+import subprocess
 from pathlib import Path
 from py_project_init.core.generator import TemplateManager
 
@@ -156,10 +157,24 @@ class TestTemplateManager(unittest.TestCase):
             (proj_dir / "app.py").write_text("print('hello')", encoding="utf-8")
 
             # 1. Retrofit hooks
-            self.manager.retrofit_hooks(proj_dir, ["pre-commit", "commit-msg"])
+            self.manager.retrofit_hooks(proj_dir, ["pre-commit", "commit-msg"], enable_autotag=True)
             self.assertTrue((proj_dir / ".git").exists())
             self.assertTrue((proj_dir / ".git" / "hooks" / "pre-commit").exists())
             self.assertTrue((proj_dir / ".git" / "hooks" / "commit-msg").exists())
+
+            # Check git config for autotag and push.followTags
+            autotag_val = subprocess.check_output(
+                ["git", "config", "--get", "hooks.autotag"],
+                cwd=proj_dir,
+                text=True
+            ).strip()
+            self.assertEqual(autotag_val, "true")
+            followtags_val = subprocess.check_output(
+                ["git", "config", "--get", "push.followTags"],
+                cwd=proj_dir,
+                text=True
+            ).strip()
+            self.assertEqual(followtags_val, "true")
 
             # 2. Retrofit agent configs
             self.manager.retrofit_agent_configs(proj_dir, ["general_guidelines"], ["code-review"])

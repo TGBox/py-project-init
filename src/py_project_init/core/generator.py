@@ -159,7 +159,8 @@ class TemplateManager:
         if context.get("enable_git_hooks", False):
             check_cancel()
             selected_hooks = context.get("selected_git_hooks", [])
-            self._install_git_hooks(target_dir, selected_hooks, log_callback)
+            enable_autotag = context.get("enable_git_tags", False)
+            self._install_git_hooks(target_dir, selected_hooks, log_callback, enable_autotag=enable_autotag)
 
         # 4. Agenten-Konfiguration (.agents/ & AGENTS.md)
         if context.get("enable_agent_configs", False):
@@ -269,8 +270,14 @@ class TemplateManager:
             else:
                 log_callback("Erfolg: git init")
 
-    def _install_git_hooks(self, target_dir: Path, selected_hooks: list[str], log_callback):
-        """Copies selected git hooks to .git/hooks/ and sets executable permissions."""
+    def _install_git_hooks(
+        self,
+        target_dir: Path,
+        selected_hooks: list[str],
+        log_callback,
+        enable_autotag: bool = False
+    ):
+        """Copies selected git hooks to .git/hooks/, sets executable permissions, and configures tags if enabled."""
         git_hooks_dir = target_dir / ".git" / "hooks"
         git_hooks_dir.mkdir(parents=True, exist_ok=True)
 
@@ -285,6 +292,24 @@ class TemplateManager:
                 except OSError:
                     pass
                 log_callback(f"Git-Hook installiert: {hook_id}")
+
+        if enable_autotag:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.autotag", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                subprocess.run(
+                    ["git", "config", "push.followTags", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: Automatisches Tagging (hooks.autotag & push.followTags) aktiviert.")
+            except Exception as e:
+                log_callback(f"Warnung: Git-Tagging konnte nicht konfiguriert werden: {e}")
 
     def _install_agent_configs(
         self,
@@ -520,10 +545,16 @@ class TemplateManager:
 
         return files_map
 
-    def retrofit_hooks(self, target_dir: Path, selected_hooks: list[str], log_callback=print):
+    def retrofit_hooks(
+        self,
+        target_dir: Path,
+        selected_hooks: list[str],
+        log_callback=print,
+        enable_autotag: bool = False
+    ):
         """Retrofits git hooks into an existing project folder."""
         self._init_git_repo(target_dir, log_callback)
-        self._install_git_hooks(target_dir, selected_hooks, log_callback)
+        self._install_git_hooks(target_dir, selected_hooks, log_callback, enable_autotag=enable_autotag)
 
     def retrofit_agent_configs(
         self,

@@ -234,6 +234,9 @@ class TestGitHooks(unittest.TestCase):
             env.pop("GIT_HOOKS_NON_INTERACTIVE", None)
             env.pop("CI", None)
 
+            # Enable autotag in repository
+            subprocess.run(["git", "config", "hooks.autotag", "true"], cwd=proj, check=True)
+
             res = subprocess.run(
                 ["git", "commit", "-m", "feat(calc): add calculator"],
                 cwd=proj,
@@ -260,6 +263,17 @@ class TestGitHooks(unittest.TestCase):
             changelog = (proj / "CHANGELOG.md").read_text(encoding="utf-8")
             self.assertIn("## SemVer v1.1.0", changelog)
             self.assertIn("feat(calc): add calculator", changelog)
+
+            # Verify git tag v1.1.0 was created on HEAD
+            tags = subprocess.check_output(["git", "tag", "-l"], cwd=proj, text=True).splitlines()
+            self.assertIn("v1.1.0", tags)
+            tag_commit = subprocess.check_output(["git", "rev-parse", "v1.1.0^{commit}"], cwd=proj, text=True).strip()
+            head_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+            self.assertEqual(tag_commit, head_commit)
+
+            # Verify push.followTags was set
+            follow_tags = subprocess.check_output(["git", "config", "--get", "push.followTags"], cwd=proj, text=True).strip()
+            self.assertEqual(follow_tags, "true")
 
 
 if __name__ == "__main__":

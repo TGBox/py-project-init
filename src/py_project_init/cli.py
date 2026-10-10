@@ -30,6 +30,7 @@ def run_cli(args: list[str] | None = None) -> int:
     parser.add_argument("-e", "--email", default="", help="E-Mail-Adresse des Autors")
     parser.add_argument("-l", "--license", default="MIT", help="Lizenz (z. B. MIT, Apache-2.0)")
     parser.add_argument("--no-hooks", action="store_true", help="Git-Hooks nicht einbinden")
+    parser.add_argument("--no-tags", action="store_true", help="Automatisches Git-Tagging bei Versionserhöhung nicht aktivieren")
     parser.add_argument("--no-agents", action="store_true", help="Agenten-Konfiguration (.agents/) nicht generieren")
     parser.add_argument("--preview", action="store_true", help="Dateivorschau anzeigen, ohne Dateien auf die Festplatte zu schreiben")
     parser.add_argument("--list", action="store_true", help="Alle verfügbaren Projektvorlagen auflisten")
@@ -60,7 +61,7 @@ def run_cli(args: list[str] | None = None) -> int:
             print(f"Fehler: '{target_path}' ist kein gültiges Verzeichnis.", file=sys.stderr)
             return 1
         all_hooks = [h["id"] for h in manager.get_available_hooks()]
-        manager.retrofit_hooks(target_path, all_hooks, log_callback=print)
+        manager.retrofit_hooks(target_path, all_hooks, log_callback=print, enable_autotag=not parsed.no_tags)
         print(f"\n✔ Git-Hooks erfolgreich in '{target_path}' nachgerüstet.")
         return 0
 
@@ -103,6 +104,7 @@ def run_cli(args: list[str] | None = None) -> int:
         "github_actions": True,
         "vscode": True,
         "enable_git_hooks": not parsed.no_hooks,
+        "enable_git_tags": not parsed.no_hooks and not parsed.no_tags,
         "selected_git_hooks": all_hooks,
         "enable_agent_configs": not parsed.no_agents,
         "selected_agent_rules": recommended.get("rules", []),

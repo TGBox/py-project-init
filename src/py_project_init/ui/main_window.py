@@ -367,8 +367,16 @@ class MainWindow(QMainWindow):
         self.git_hooks_list_layout.setContentsMargins(12, 6, 6, 6)
         self.git_hooks_list_layout.setSpacing(8)
         hooks_box_layout.addWidget(self.git_hooks_container)
+
+        self.git_tags_enable_cb = QCheckBox("Git-Tags bei Versionserhöhung automatisch erstellen (vX.Y.Z & push.followTags)")
+        self.git_tags_enable_cb.setChecked(True)
+        self.git_tags_enable_cb.setToolTip("Erstellt bei SemVer-Bumps automatisch einen annotierten Tag und aktiviert 'push.followTags' für automatisches Mitpushen.")
+        hooks_box_layout.addWidget(self.git_tags_enable_cb)
+
         self.git_hooks_enable_cb.toggled.connect(self.git_hooks_container.setEnabled)
+        self.git_hooks_enable_cb.toggled.connect(self.git_tags_enable_cb.setEnabled)
         self.git_hooks_enable_cb.toggled.connect(lambda _: self._update_summary())
+        self.git_tags_enable_cb.toggled.connect(lambda _: self._update_summary())
         tab2_layout.addWidget(self.git_hooks_box)
 
         # Agenten Box
@@ -632,7 +640,8 @@ class MainWindow(QMainWindow):
         features = []
         if hasattr(self, "git_hooks_enable_cb") and self.git_hooks_enable_cb.isChecked():
             hooks_count = sum(1 for cb in self.hook_checkboxes.values() if cb.isChecked())
-            features.append(f"🛡️ {hooks_count} Hooks")
+            tags_txt = " + Tags" if hasattr(self, "git_tags_enable_cb") and self.git_tags_enable_cb.isChecked() else ""
+            features.append(f"🛡️ {hooks_count} Hooks{tags_txt}")
         else:
             features.append("🛡️ Hooks inaktiv")
 
@@ -1058,6 +1067,7 @@ class MainWindow(QMainWindow):
             "license": license_val,
             "custom_scripts": self._get_custom_scripts_dict(),
             "enable_git_hooks": self.git_hooks_enable_cb.isChecked(),
+            "enable_git_tags": self.git_tags_enable_cb.isChecked() if hasattr(self, "git_tags_enable_cb") else False,
             "selected_git_hooks": [
                 h_id for h_id, cb in self.hook_checkboxes.items() if cb.isChecked()
             ],

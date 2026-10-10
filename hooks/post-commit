@@ -54,25 +54,27 @@ if [ "$INTERACTIVE" = "1" ]; then
   # Aktuelle Version ermitteln
   CURRENT_VERSION=""
   if [ -f "pyproject.toml" ]; then
-    CURRENT_VERSION=$("$PYTHON_BIN" -c "
+    CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
 import re
 try:
     with open('pyproject.toml', 'r', encoding='utf-8') as f:
-        m = re.search(r'version\s*=\s*\"(\d+\.\d+\.\d+)\"', f.read())
+        m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', f.read())
         if m:
-            print(f'{m.group(1)}.{m.group(2)}.{m.group(3)}')
+            print(m.group(1))
 except Exception:
     pass
-" 2>/dev/null || true)
+EOF
+)
   elif [ -f "package.json" ]; then
-    CURRENT_VERSION=$("$PYTHON_BIN" -c "
+    CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
 import json
 try:
     with open('package.json', 'r', encoding='utf-8') as f:
         print(json.load(f).get('version', ''))
 except Exception:
     pass
-" 2>/dev/null || true)
+EOF
+)
   fi
 
   echo "----------------------------------------"
@@ -278,4 +280,47 @@ git add CHANGELOG.md
 if ! git diff --cached --quiet; then
   export GIT_CHANGELOG_RUNNING=1
   git commit --no-verify --amend --no-edit
-fi
+fi
+
+# -----------------------------------------------------------------------------
+# 4. Optional: Automatisches Git-Tagging
+# -----------------------------------------------------------------------------
+AUTO_TAG=$(git config --bool hooks.autotag 2>/dev/null || echo "false")
+if [ "$AUTO_TAG" = "true" ] && [ -n "$BUMP" ]; then
+  NEW_VERSION=""
+  if [ -f "pyproject.toml" ]; then
+    NEW_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import re
+try:
+    with open('pyproject.toml', 'r', encoding='utf-8') as f:
+        m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', f.read())
+        if m:
+            print(m.group(1))
+except Exception:
+    pass
+EOF
+)
+  elif [ -f "package.json" ]; then
+    NEW_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import json
+try:
+    with open('package.json', 'r', encoding='utf-8') as f:
+        print(json.load(f).get('version', ''))
+except Exception:
+    pass
+EOF
+)
+  fi
+
+  if [ -n "$NEW_VERSION" ]; then
+    TAG_NAME="v$NEW_VERSION"
+    git tag -a "$TAG_NAME" -m "Release $TAG_NAME" -f
+    echo "✔ Git-Tag '$TAG_NAME' auf aktuellen Commit gesetzt."
+
+    # Sicherstellen, dass Git Tags bei 'git push' automatisch überträgt
+    if [ "$(git config --bool push.followTags 2>/dev/null)" != "true" ]; then
+      git config push.followTags true
+    fi
+  fi
+fi
+

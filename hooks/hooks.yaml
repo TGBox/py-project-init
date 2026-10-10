@@ -15,7 +15,7 @@ prepare-commit-msg:
 
 post-commit:
   name: "Post-Commit: SemVer-Bump & Changelog-Generator"
-  description: "Fragt nach SemVer-Bumps, aktualisiert Lockfiles und pflegt die CHANGELOG.md per Commit-Amend."
+  description: "Fragt nach SemVer-Bumps, aktualisiert Lockfiles, pflegt CHANGELOG.md per Amend und setzt optional Git-Tags."
   default: true
 
 post-checkout:
