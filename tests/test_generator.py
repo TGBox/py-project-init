@@ -197,6 +197,40 @@ class TestTemplateManager(unittest.TestCase):
             self.assertIn("{{ project_name }}", readme_j2)
 
 
+    def test_agents_md_markdownlint_compliance(self):
+        """Verifies that AGENTS.md complies with Markdownlint rules (e.g. blank lines after headings)."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj_dir = Path(temp_dir) / "test_proj"
+            proj_dir.mkdir()
+            self.manager.retrofit_agent_configs(proj_dir, ["general_guidelines"], ["code-review"])
+
+            agents_md_path = proj_dir / "AGENTS.md"
+            self.assertTrue(agents_md_path.exists())
+            content = agents_md_path.read_text(encoding="utf-8")
+
+            # Must end with single newline
+            self.assertTrue(content.endswith("\n"))
+            self.assertFalse(content.endswith("\n\n"))
+
+            lines = content.split("\n")
+            for i, line in enumerate(lines):
+                if line.startswith("#"):
+                    # Heading must be followed by a blank line
+                    if i + 1 < len(lines):
+                        self.assertEqual(
+                            lines[i + 1],
+                            "",
+                            f"Heading at line {i+1} ('{line}') must be followed by a blank line."
+                        )
+                    # Heading must be preceded by a blank line if not first line
+                    if i > 0:
+                        self.assertEqual(
+                            lines[i - 1],
+                            "",
+                            f"Heading at line {i+1} ('{line}') must be preceded by a blank line."
+                        )
+
+
 if __name__ == "__main__":
     unittest.main()
 

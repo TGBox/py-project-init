@@ -329,40 +329,60 @@ class TemplateManager:
                     log_callback(f"Agent-Skill hinzugefügt: {skill.get('name')}")
 
         # Generate AGENTS.md in project root
-        agents_md_lines = [
+        agents_md_content = self._generate_agents_md_content(
+            active_rules_info,
+            active_skills_info
+        )
+        (target_dir / "AGENTS.md").write_text(agents_md_content, encoding="utf-8")
+        log_callback("AGENTS.md im Projektstamm generiert.")
+
+    def _generate_agents_md_content(
+        self,
+        active_rules_info: list[dict],
+        active_skills_info: list[dict],
+        project_name: str | None = None
+    ) -> str:
+        """Generates the content for AGENTS.md conforming to Markdownlint conventions."""
+        intro = (
+            f"Dieses Projekt ('{project_name}') enthält projektspezifische Richtlinien und Skills für Coding-Agenten im Verzeichnis `.agents/`."
+            if project_name
+            else "Dieses Projekt enthält projektspezifische Richtlinien und Skills für Coding-Agenten im Verzeichnis `.agents/`."
+        )
+        lines = [
             "# Agent Workspace Configuration",
             "",
-            "Dieses Projekt enthält projektspezifische Richtlinien und Skills für Coding-Agenten im Verzeichnis `.agents/`.",
+            intro,
             "",
             "## Aktive Regeln (`.agents/rules/`)",
+            "",
         ]
         if active_rules_info:
             for r in active_rules_info:
-                agents_md_lines.append(f"- **{r.get('name')}**: {r.get('description')}")
+                lines.append(f"- **{r.get('name')}**: {r.get('description')}")
         else:
-            agents_md_lines.append("- Keine spezifischen Regeln ausgewählt.")
+            lines.append("- Keine spezifischen Regeln ausgewählt.")
 
-        agents_md_lines.extend([
+        lines.extend([
             "",
             "## Aktive Skills (`.agents/skills/`)",
+            "",
         ])
         if active_skills_info:
             for s in active_skills_info:
-                agents_md_lines.append(f"- **{s.get('name')}**: {s.get('description')}")
+                lines.append(f"- **{s.get('name')}**: {s.get('description')}")
         else:
-            agents_md_lines.append("- Keine spezifischen Skills ausgewählt.")
+            lines.append("- Keine spezifischen Skills ausgewählt.")
 
-        agents_md_lines.extend([
+        lines.extend([
             "",
             "## Richtlinien für KI-Agenten",
+            "",
             "1. Lies vor größeren Änderungen die anwendbaren Regeln in `.agents/rules/`.",
             "2. Verwende die Skills in `.agents/skills/` für automatisierte Workflows wie Reviews und Tests.",
             "3. Behalte die Projektstruktur sauber und folge den etablierten Konventionen.",
-            ""
+            "",
         ])
-
-        (target_dir / "AGENTS.md").write_text("\n".join(agents_md_lines), encoding="utf-8")
-        log_callback("AGENTS.md im Projektstamm generiert.")
+        return "\n".join(lines)
 
     def preview(self, template_id: str, context: dict) -> dict[str, dict]:
         """Generates an in-memory simulation of the resulting project structure and files."""
@@ -438,21 +458,14 @@ class TemplateManager:
                     active_skills_info.append(skill)
 
             # AGENTS.md
-            agents_md_lines = [
-                "# Agent Workspace Configuration",
-                "",
-                f"Dieses Projekt ('{context.get('project_name', '')}') enthält projektspezifische Richtlinien und Skills in `.agents/`.",
-                "",
-                "## Aktive Regeln",
-            ]
-            for r in active_rules_info:
-                agents_md_lines.append(f"- **{r.get('name')}**: {r.get('description')}")
-            agents_md_lines.extend(["", "## Aktive Skills"])
-            for s in active_skills_info:
-                agents_md_lines.append(f"- **{s.get('name')}**: {s.get('description')}")
+            agents_md_content = self._generate_agents_md_content(
+                active_rules_info,
+                active_skills_info,
+                project_name=context.get("project_name")
+            )
             files_map["AGENTS.md"] = {
                 "is_dir": False,
-                "content": "\n".join(agents_md_lines) + "\n",
+                "content": agents_md_content,
                 "source": "AGENTS.md"
             }
 
