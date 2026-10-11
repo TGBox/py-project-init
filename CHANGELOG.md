@@ -2,7 +2,8 @@
 
 ## SemVer v3.0.0
 
-- 2026-10-11 (d041a3b): fix: update semver manually
+- 2026-10-11 (6b9802c): fix: update uv.lock with new specs
+- 2026-10-11 (73325af): fix: update semver manually
 
 ## SemVer v2.0.1
 
