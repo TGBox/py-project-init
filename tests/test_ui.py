@@ -63,16 +63,52 @@ class TestMainWindow(unittest.TestCase):
         self.assertEqual(len(self.window._get_custom_scripts_dict()), 0)
 
     def test_preview_dialog(self):
-        """Tests that PreviewDialog loads files and displays content on selection."""
-        mock_files = {
-            "src/main.py": "def main():\n    pass\n",
-            "README.md": "# Test Project\n"
+        """Tests that PreviewDialog loads files and displays content on selection and clicks."""
+        # 1. Test dict format as produced by generator.preview()
+        mock_generator_files = {
+            "src": {"is_dir": True, "content": None, "source": "Template"},
+            "src/main.py": {"is_dir": False, "content": "def main():\n    print('hello')\n", "source": "Template"},
+            "README.md": {"is_dir": False, "content": "# Test Project\nPreview description\n", "source": "Template"},
+            ".venv": {"is_dir": True, "content": None, "source": "uv venv"}
         }
-        dlg = PreviewDialog(mock_files, parent=self.window)
+        dlg = PreviewDialog(mock_generator_files, parent=self.window)
         self.assertIsNotNone(dlg.tree_widget)
         self.assertGreater(dlg.tree_widget.topLevelItemCount(), 0)
-        self.assertIn("Test Project", dlg.content_view.toPlainText() or dlg.files_map["README.md"])
+
+        # First file should be automatically selected and displayed
+        self.assertTrue(len(dlg.content_view.toPlainText()) > 0)
+
+        # Find README.md item in tree and trigger click
+        readme_item = None
+        for i in range(dlg.tree_widget.topLevelItemCount()):
+            top = dlg.tree_widget.topLevelItem(i)
+            if top.text(0).endswith("README.md"):
+                readme_item = top
+                break
+        self.assertIsNotNone(readme_item)
+        dlg._on_item_clicked(readme_item, 0)
+        self.assertIn("Preview description", dlg.content_view.toPlainText())
+        self.assertIn("README.md", dlg.file_title_label.text())
+
+        # Click on folder item
+        folder_item = None
+        for i in range(dlg.tree_widget.topLevelItemCount()):
+            top = dlg.tree_widget.topLevelItem(i)
+            if top.text(0).startswith("📁"):
+                folder_item = top
+                break
+        if folder_item:
+            dlg._on_item_clicked(folder_item, 0)
+            self.assertIn("Ordner", dlg.file_title_label.text())
         dlg.close()
+
+        # 2. Test legacy string format for backward compatibility
+        mock_simple_files = {
+            "app.py": "print('simple')",
+        }
+        dlg_simple = PreviewDialog(mock_simple_files, parent=self.window)
+        self.assertIn("print('simple')", dlg_simple.content_view.toPlainText())
+        dlg_simple.close()
 
     def test_retrofit_dialog(self):
         """Tests that RetrofitDialog instantiates with hooks and rules checkboxes."""

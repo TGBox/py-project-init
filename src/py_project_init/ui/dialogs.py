@@ -2,7 +2,9 @@
 
 import os
 from pathlib import Path
+from typing import Any
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTreeWidget, QTreeWidgetItem, QTextEdit, QSplitter,
@@ -15,11 +17,12 @@ from py_project_init.core.generator import TemplateManager
 class PreviewDialog(QDialog):
     """Dialog displaying a virtual preview of generated files and folders."""
 
-    def __init__(self, files_map: dict[str, str], parent=None):
+    def __init__(self, files_map: dict[str, Any], parent=None):
         super().__init__(parent)
         self.setWindowTitle("Live-Vorschau: Projektstruktur & Dateien")
-        self.resize(920, 620)
-        self.files_map = files_map
+        self.resize(960, 640)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
+        self.files_map = files_map or {}
 
         self._init_ui()
         self._populate_tree()
@@ -39,14 +42,11 @@ class PreviewDialog(QDialog):
         splitter = QSplitter(Qt.Horizontal)
 
         # Left: Tree Widget
-        tree_container = QVBoxLayout()
-        tree_label = QLabel("<b>Projektstruktur</b>")
         self.tree_widget = QTreeWidget()
         self.tree_widget.setHeaderLabels(["Datei / Ordner"])
         self.tree_widget.setColumnWidth(0, 280)
         self.tree_widget.itemSelectionChanged.connect(self._on_item_selected)
-
-        tree_layout_widget = QTreeWidget()  # reuse splitter widgets cleanly
+        self.tree_widget.itemClicked.connect(self._on_item_clicked)
         splitter.addWidget(self.tree_widget)
 
         # Right: File Content Preview
@@ -59,6 +59,9 @@ class PreviewDialog(QDialog):
         self.content_view.setPlaceholderText(
             "Wähle links eine Datei aus, um deren Inhalt anzuzeigen..."
         )
+        font = QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont)
+        font.setPointSize(10)
+        self.content_view.setFont(font)
 
         content_layout.addWidget(self.file_title_label)
         content_layout.addWidget(self.content_view)
@@ -70,8 +73,23 @@ class PreviewDialog(QDialog):
 
         # Footer
         footer_layout = QHBoxLayout()
-        count = len(self.files_map)
-        count_label = QLabel(f"<b>{count}</b> Datei{'en' if count != 1 else ''} insgesamt generiert")
+        file_count = sum(
+            1 for p, info in self.files_map.items()
+            if not (isinstance(info, dict) and info.get("is_dir", False))
+        )
+        dir_count = sum(
+            1 for p, info in self.files_map.items()
+            if (isinstance(info, dict) and info.get("is_dir", False))
+        )
+        if dir_count > 0:
+            count_label = QLabel(
+                f"<b>{file_count}</b> Datei{'en' if file_count != 1 else ''} in "
+                f"<b>{dir_count}</b> Ordner{'n' if dir_count != 1 else ''} generiert"
+            )
+        else:
+            count_label = QLabel(
+                f"<b>{file_count}</b> Datei{'en' if file_count != 1 else ''} insgesamt generiert"
+            )
         count_label.setObjectName("mutedLabel")
 
         close_btn = QPushButton("Schließen")
@@ -91,24 +109,34 @@ class PreviewDialog(QDialog):
         sorted_paths = sorted(self.files_map.keys())
 
         for rel_path in sorted_paths:
-            parts = rel_path.split("/")
+            normalized_path = rel_path.replace("\\", "/").strip("/")
+            parts = [p for p in normalized_path.split("/") if p]
+            if not parts:
+                continue
+
             current_path = ""
             parent_item = None
 
             for i, part in enumerate(parts):
                 current_path = f"{current_path}/{part}" if current_path else part
-                is_file = (i == len(parts) - 1)
+                is_leaf = (i == len(parts) - 1)
+
+                entry = self.files_map.get(current_path) or self.files_map.get(rel_path)
+                if not is_leaf:
+                    is_folder = True
+                else:
+                    is_folder = isinstance(entry, dict) and entry.get("is_dir", False)
 
                 if current_path in nodes:
                     parent_item = nodes[current_path]
                 else:
                     item = QTreeWidgetItem()
-                    if is_file:
-                        item.setText(0, f"📄 {part}")
-                        item.setData(0, Qt.UserRole, rel_path)
-                    else:
+                    if is_folder:
                         item.setText(0, f"📁 {part}")
                         item.setData(0, Qt.UserRole, None)
+                    else:
+                        item.setText(0, f"📄 {part}")
+                        item.setData(0, Qt.UserRole, rel_path)
 
                     if parent_item is None:
                         self.tree_widget.addTopLevelItem(item)
@@ -120,12 +148,13 @@ class PreviewDialog(QDialog):
 
         self.tree_widget.expandAll()
 
-        # Select first file if available
+        # Select and show first file if available
         for i in range(self.tree_widget.topLevelItemCount()):
             top = self.tree_widget.topLevelItem(i)
             first_file = self._find_first_file_item(top)
             if first_file:
                 self.tree_widget.setCurrentItem(first_file)
+                self._show_item_content(first_file)
                 break
 
     def _find_first_file_item(self, item: QTreeWidgetItem) -> QTreeWidgetItem | None:
@@ -143,18 +172,48 @@ class PreviewDialog(QDialog):
             self.file_title_label.setText("<i>Keine Datei ausgewählt</i>")
             self.content_view.clear()
             return
+        self._show_item_content(selected[0])
 
-        item = selected[0]
+    def _on_item_clicked(self, item: QTreeWidgetItem, column: int = 0):
+        self._show_item_content(item)
+
+    def _show_item_content(self, item: QTreeWidgetItem):
         rel_path = item.data(0, Qt.UserRole)
-        if rel_path and rel_path in self.files_map:
-            content = self.files_map[rel_path]
-            lines = content.count("\n") + 1
-            size_bytes = len(content.encode("utf-8"))
-            self.file_title_label.setText(f"📄 {rel_path}  ({lines} Zeilen, {size_bytes} Bytes)")
-            self.content_view.setPlainText(content)
+        if not rel_path or (rel_path not in self.files_map and rel_path.replace("\\", "/") not in self.files_map):
+            folder_name = item.text(0).replace("📁 ", "").replace("📄 ", "").strip()
+            self.file_title_label.setText(f"📁 {folder_name} (Ordner)")
+            self.content_view.setPlainText(
+                "Dieser Ordner enthält Unterdateien oder Verzeichnisse.\n"
+                "Klicke auf eine Datei in der Baumstruktur links, um deren Inhalt anzuzeigen."
+            )
+            return
+
+        entry = self.files_map.get(rel_path)
+        if entry is None:
+            entry = self.files_map.get(rel_path.replace("\\", "/"))
+
+        if isinstance(entry, dict):
+            if entry.get("is_dir"):
+                folder_name = item.text(0).replace("📁 ", "").replace("📄 ", "").strip()
+                self.file_title_label.setText(f"📁 {folder_name} (Ordner)")
+                self.content_view.setPlainText(
+                    "Dieser Ordner enthält Unterdateien oder Verzeichnisse.\n"
+                    "Klicke auf eine Datei in der Baumstruktur links, um deren Inhalt anzuzeigen."
+                )
+                return
+
+            raw_content = entry.get("content")
+            source = entry.get("source", "")
         else:
-            self.file_title_label.setText(f"📁 {item.text(0).replace('📁 ', '')} (Ordner)")
-            self.content_view.clear()
+            raw_content = entry
+            source = ""
+
+        content = "" if raw_content is None else str(raw_content)
+        lines = content.count("\n") + 1 if content else 0
+        size_bytes = len(content.encode("utf-8"))
+        source_info = f" • Quelle: {source}" if source else ""
+        self.file_title_label.setText(f"📄 {rel_path}  ({lines} Zeilen, {size_bytes} Bytes{source_info})")
+        self.content_view.setPlainText(content)
 
 
 class RetrofitDialog(QDialog):
