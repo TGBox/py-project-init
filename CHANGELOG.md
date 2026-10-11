@@ -1,8 +1,12 @@
 # Changelog
 
+## SemVer v3.0.1
+
+- 2026-10-11 (4c9aa85): fix(toml): bump semver
+
 ## SemVer v3.0.0
 
-- 2026-10-11 (b474309): fix(preview)!: live preview is now working correctly
+- 2026-10-11 (7aa191d): fix(preview)!: live preview is now working correctly
 - 2026-10-11 (aa47622): fix: update uv.lock with new specs
 - 2026-10-11 (73325af): fix: update semver manually
 
