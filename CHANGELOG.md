@@ -1,8 +1,12 @@
 # Changelog
 
+## SemVer v3.0.0
+
+- 2026-10-11 (d041a3b): fix: update semver manually
+
 ## SemVer v2.0.1
 
-- 2026-10-11 (04fb5bb): fix(config): new projects are now not getting their dashes replaced by underscores in the script names and subfolders, feat!(scripts): added new default selection of scripts to include in the newly generated projects
+- 2026-10-11 (1c682fc): fix(config): new projects are now not getting their dashes replaced by underscores in the script names and subfolders, feat!(scripts): added new default selection of scripts to include in the newly generated projects
 - 2026-10-10 (e9ffd5a): fix(hooks): optimize hook workflow to prevent a semver bump when a commit message was configured incorrectly
 - 2026-10-10 (f030481): fix(changelog): add newly generated changelog file
 
