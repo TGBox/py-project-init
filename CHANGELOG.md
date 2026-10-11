@@ -2,7 +2,8 @@
 
 ## SemVer v3.0.1
 
-- 2026-10-11 (4c9aa85): fix(toml): bump semver
+- 2026-10-11 (b75cae9): fix(uv): add changed lock file
+- 2026-10-11 (956e7ff): fix(toml): bump semver
 
 ## SemVer v3.0.0
 
