@@ -1,5 +1,5 @@
 [project]
-name = "{{ project_slug }}"
+name = "{{ project_name }}"
 version = "0.1.0"
 description = "{{ description }}"
 readme = "README.md"
@@ -19,8 +19,13 @@ dependencies = [
     "pydantic-settings>=2.5.0",
 ]
 
-{% if custom_scripts %}
 [project.scripts]
+{{ project_name }} = "src.main:run"
+main = "src.main:run"
+test = "pytest:main"
+format = "src.tools:format_code"
+lint = "src.tools:lint_code"
+{% if custom_scripts %}
 {% for s_name, s_cmd in custom_scripts.items() %}
 {{ s_name }} = "{{ s_cmd }}"
 {% endfor %}
@@ -32,6 +37,13 @@ dev = [
     "httpx>=0.27.0",
     "ruff>=0.6.0",
 ]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [tool.ruff]
 line-length = 88

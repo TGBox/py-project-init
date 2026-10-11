@@ -48,6 +48,20 @@ class TestMainWindow(unittest.TestCase):
         self.assertIn("my_task", scripts)
         self.assertEqual(scripts["my_task"], "echo hello")
 
+        # Check script recommendations and preset actions
+        recommended = self.window._get_recommended_scripts("python-cli")
+        for key in ["main", "test", "build", "format", "lint"]:
+            self.assertIn(key, recommended)
+
+        self.window._apply_recommended_scripts()
+        active_scripts = self.window._get_custom_scripts_dict()
+        self.assertIn("main", active_scripts)
+        self.assertIn("test", active_scripts)
+        self.assertIn("build", active_scripts)
+
+        self.window._clear_all_scripts()
+        self.assertEqual(len(self.window._get_custom_scripts_dict()), 0)
+
     def test_preview_dialog(self):
         """Tests that PreviewDialog loads files and displays content on selection."""
         mock_files = {

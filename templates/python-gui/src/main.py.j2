@@ -55,11 +55,14 @@ def main() -> None:
     frame.Show()
     app.MainLoop()
 {% elif framework == "kivy" %}
-class {{ project_slug | title }}App(App):
+class {{ project_name | replace("-", "_") | replace(" ", "_") | title }}App(App):
     def build(self):
         return Label(text="Hallo aus {{ project_name }}!")
 
 
 def main() -> None:
-    {{ project_slug | title }}App().run()
+    {{ project_name | replace("-", "_") | replace(" ", "_") | title }}App().run()
 {% endif %}
+
+if __name__ == "__main__":
+    main()

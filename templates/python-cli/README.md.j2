@@ -12,12 +12,14 @@
 ## Ordnerstruktur
 
 ```text
-{{ project_slug }}/
+{{ project_name }}/
 ├── src/
-│   └── {{ project_slug }}/
-│       ├── __init__.py
-│       └── main.py
+│   ├── __init__.py
+│   ├── main.py
+│   ├── build.py
+│   └── tools.py
 ├── tests/
+│   └── test_main.py
 {% if docker %}├── Dockerfile{% endif %}
 {% if github_actions %}├── .github/workflows/ci.yml{% endif %}
 ├── .gitignore
@@ -29,6 +31,17 @@
 
 ```bash
 git clone <repo-url>
-cd {{ project_slug }}
+cd {{ project_name }}
 uv sync
+
+# App ausführen
+uv run main
+# oder:
+uv run {{ project_name }}
+
+# Tests ausführen
+uv run test
+
+# Exe-Datei mit PyInstaller erstellen
+uv run build
 ```

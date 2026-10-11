@@ -225,6 +225,27 @@ QPushButton#toolButton {
     font-size: 12px;
 }
 
+/* Quick Pill Buttons */
+QPushButton#pillButton {
+    background-color: #1f2335;
+    border: 1px solid #3b4261;
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 11px;
+    color: #7aa2f7;
+    font-weight: 600;
+}
+
+QPushButton#pillButton:hover {
+    background-color: #292e42;
+    border-color: #7aa2f7;
+    color: #ffffff;
+}
+
+QPushButton#pillButton:pressed {
+    background-color: #3d59a1;
+}
+
 /* Checkboxes */
 QCheckBox {
     spacing: 8px;

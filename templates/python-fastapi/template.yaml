@@ -17,7 +17,7 @@ file_conditions:
     when: "docker"
 hooks:
   pre_init:
-    - ["uv", "init"]
+    - ["uv", "init", "--bare"]
     - ["uv", "venv"]
   post_create:
     - ["uv", "sync"]

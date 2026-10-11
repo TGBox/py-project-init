@@ -40,7 +40,7 @@ file_conditions:
     when: "vscode"
 hooks:
   pre_init:
-    - ["uv", "init"]
+    - ["uv", "init", "--bare"]
     - ["uv", "venv"]
   post_create:
     - ["uv", "sync"]

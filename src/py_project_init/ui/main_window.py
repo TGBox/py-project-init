@@ -96,6 +96,7 @@ class MainWindow(QMainWindow):
         self._populate_templates()
         self._populate_git_hooks()
         self._refresh_agent_configs()
+        self._refresh_script_preset_buttons()
         self._update_summary()
 
     def _apply_theme(self):
@@ -456,8 +457,34 @@ class MainWindow(QMainWindow):
         adv_layout.addLayout(author_row)
         tab3_layout.addWidget(self.advanced_box)
 
-        scripts_box = QGroupBox("Benutzerdefinierte Skripte (pyproject.toml / package.json)")
+        scripts_box = QGroupBox("Projekt-Skripte & Befehle (pyproject.toml / package.json)")
         scripts_layout = QVBoxLayout(scripts_box)
+
+        # ── Schnellvorschläge ──
+        sugg_header = QHBoxLayout()
+        lbl_sugg = QLabel("💡 Schnellvorschläge:")
+        lbl_sugg.setStyleSheet("font-weight: 600; color: #7aa2f7;")
+        sugg_header.addWidget(lbl_sugg)
+
+        apply_sugg_btn = QPushButton("✨ Standard-Vorschläge laden")
+        apply_sugg_btn.setObjectName("toolButton")
+        apply_sugg_btn.setToolTip("Übernimmt empfohlene Standard-Skripte für die aktuelle Vorlage (main, test, build, format, lint)")
+        apply_sugg_btn.clicked.connect(self._apply_recommended_scripts)
+        sugg_header.addWidget(apply_sugg_btn)
+
+        clear_scripts_btn = QPushButton("🗑️ Alle leeren")
+        clear_scripts_btn.setObjectName("toolButton")
+        clear_scripts_btn.clicked.connect(self._clear_all_scripts)
+        sugg_header.addWidget(clear_scripts_btn)
+        sugg_header.addStretch()
+        scripts_layout.addLayout(sugg_header)
+
+        # Quick-add pill buttons row
+        self.preset_pills_container = QWidget()
+        self.preset_pills_layout = QHBoxLayout(self.preset_pills_container)
+        self.preset_pills_layout.setContentsMargins(0, 2, 0, 4)
+        self.preset_pills_layout.setSpacing(6)
+        scripts_layout.addWidget(self.preset_pills_container)
 
         script_input_row = QHBoxLayout()
         self.script_name_input = QLineEdit()
@@ -776,19 +803,117 @@ class MainWindow(QMainWindow):
 
     # ── Benutzerdefinierte Skripte ──────────────────────────────────────────
 
+    def _get_recommended_scripts(self, template_id: str | None = None) -> dict[str, str]:
+        """Returns standard recommended scripts based on selected template and language."""
+        if not template_id and hasattr(self, "template_combo"):
+            template_id = self.template_combo.currentData() or ""
+        template_meta = self.template_manager.templates.get(template_id or "", {})
+        lang = template_meta.get("language", "").lower()
+
+        t_id = (template_id or "").lower()
+        if "node" in t_id or "node" in lang or "typescript" in lang:
+            return {
+                "main": "node dist/index.js",
+                "test": "vitest run",
+                "build": "tsc",
+                "format": "prettier --write .",
+                "lint": "eslint .",
+            }
+        elif "rust" in t_id or "rust" in lang:
+            return {
+                "main": "cargo run",
+                "test": "cargo test",
+                "build": "cargo build --release",
+                "format": "cargo fmt",
+                "lint": "cargo clippy",
+            }
+        elif "fastapi" in t_id:
+            return {
+                "main": "src.main:run",
+                "test": "pytest:main",
+                "format": "src.tools:format_code",
+                "lint": "src.tools:lint_code",
+            }
+        else:
+            # Python CLI & GUI
+            return {
+                "main": "src.main:main",
+                "test": "pytest:main",
+                "build": "src.build:main",
+                "format": "src.tools:format_code",
+                "lint": "src.tools:lint_code",
+            }
+
+    def _refresh_script_preset_buttons(self):
+        """Builds quick-add pill buttons for the currently active template recommendations."""
+        if not hasattr(self, "preset_pills_layout"):
+            return
+
+        while self.preset_pills_layout.count():
+            item = self.preset_pills_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        recommended = self._get_recommended_scripts()
+        descriptions = {
+            "main": "App ausführen",
+            "test": "Testsuite ausführen",
+            "build": "Exe erstellen",
+            "format": "Code formatieren",
+            "lint": "Code prüfen",
+        }
+
+        for name, cmd in recommended.items():
+            desc = descriptions.get(name, cmd)
+            btn = QPushButton(f"➕ {name}")
+            btn.setObjectName("pillButton")
+            btn.setToolTip(f"{name} ({desc}): {cmd}")
+            btn.clicked.connect(lambda _, n=name, c=cmd: self._add_or_update_script(n, c))
+            self.preset_pills_layout.addWidget(btn)
+
+        self.preset_pills_layout.addStretch()
+
+    def _add_or_update_script(self, name: str, cmd: str):
+        """Adds a script or updates it if it already exists in the table."""
+        for row in range(self.scripts_table.rowCount()):
+            item = self.scripts_table.item(row, 0)
+            if item and item.text() == name:
+                self.scripts_table.setItem(row, 1, QTableWidgetItem(cmd))
+                self.scripts_table.selectRow(row)
+                self._save_scripts_settings()
+                self.statusBar().showMessage(f"Skript '{name}' aktualisiert.", 2500)
+                return
+
+        row = self.scripts_table.rowCount()
+        self.scripts_table.insertRow(row)
+        self.scripts_table.setItem(row, 0, QTableWidgetItem(name))
+        self.scripts_table.setItem(row, 1, QTableWidgetItem(cmd))
+        self.scripts_table.selectRow(row)
+        self._save_scripts_settings()
+        self.statusBar().showMessage(f"Skript '{name}' hinzugefügt.", 2500)
+
+    def _apply_recommended_scripts(self):
+        """Overwrites or fills the script table with recommended scripts for current template."""
+        recommended = self._get_recommended_scripts()
+        for name, cmd in recommended.items():
+            self._add_or_update_script(name, cmd)
+        self.statusBar().showMessage("Standard-Skriptvorschläge übernommen.", 2500)
+
+    def _clear_all_scripts(self):
+        """Clears all scripts from table and settings."""
+        self.scripts_table.setRowCount(0)
+        self._save_scripts_settings()
+        self.statusBar().showMessage("Alle Skripte gelöscht.", 2500)
+
     def _add_custom_script(self):
         name = self.script_name_input.text().strip()
         cmd = self.script_cmd_input.text().strip()
         if not name or not cmd:
             return
 
-        row = self.scripts_table.rowCount()
-        self.scripts_table.insertRow(row)
-        self.scripts_table.setItem(row, 0, QTableWidgetItem(name))
-        self.scripts_table.setItem(row, 1, QTableWidgetItem(cmd))
+        self._add_or_update_script(name, cmd)
         self.script_name_input.clear()
         self.script_cmd_input.clear()
-        self._save_scripts_settings()
 
     def _remove_custom_script(self):
         row = self.scripts_table.currentRow()
@@ -821,6 +946,9 @@ class MainWindow(QMainWindow):
                 self.scripts_table.setItem(row, 1, QTableWidgetItem(str(cmd)))
         except Exception:
             pass
+
+        if self.scripts_table.rowCount() == 0:
+            self._apply_recommended_scripts()
 
     # ── Template Management ─────────────────────────────────────────────────
 
@@ -983,6 +1111,7 @@ class MainWindow(QMainWindow):
 
         # Update recommended agent configs for the new template
         self._refresh_agent_configs()
+        self._refresh_script_preset_buttons()
 
     # ── Einstellungen Persistenz ────────────────────────────────────────────
 

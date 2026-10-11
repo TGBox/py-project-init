@@ -118,6 +118,52 @@ class TestTemplateManager(unittest.TestCase):
             self.assertIn('lint = "ruff check ."', pyproject_content)
             self.assertIn('format = "ruff format ."', pyproject_content)
 
+    def test_hyphen_project_naming_and_flat_structure(self):
+        """Verifies projects with hyphens retain exact name in commands and use flat src structure."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj_name = "py-aether-forge"
+            target_dir = Path(temp_dir) / proj_name
+            context = {
+                "project_name": proj_name,
+                "project_slug": "py_aether_forge",
+                "description": "Aether Forge Project",
+                "author": "Aether Dev",
+                "author_email": "dev@aether.org",
+                "license": "MIT",
+                "custom_scripts": {},
+                "docker": False,
+                "github_actions": False,
+                "vscode": False,
+                "enable_git_hooks": False,
+                "enable_agent_configs": False,
+            }
+
+            self.manager.generate(
+                target_dir=target_dir,
+                template_id="python-cli",
+                context=context,
+                log_callback=lambda msg: None
+            )
+
+            # 1. Target directory has exact hyphenated name
+            self.assertEqual(target_dir.name, "py-aether-forge")
+
+            # 2. Structure inside src/ is flat: src/main.py, src/build.py, etc.
+            self.assertTrue((target_dir / "src" / "main.py").exists())
+            self.assertTrue((target_dir / "src" / "build.py").exists())
+            self.assertTrue((target_dir / "src" / "tools.py").exists())
+
+            # 3. No internal folder with swapped characters exists
+            self.assertFalse((target_dir / "src" / "py_aether_forge").exists())
+
+            # 4. pyproject.toml contains exact name and commands without character swapping
+            pyproject_txt = (target_dir / "pyproject.toml").read_text(encoding="utf-8")
+            self.assertIn('name = "py-aether-forge"', pyproject_txt)
+            self.assertIn('py-aether-forge = "src.main:main"', pyproject_txt)
+            self.assertIn('main = "src.main:main"', pyproject_txt)
+            self.assertIn('test = "pytest:main"', pyproject_txt)
+            self.assertIn('build = "src.build:main"', pyproject_txt)
+
     def test_preview_simulation(self):
         """Verifies in-memory preview simulates generation without touching disk."""
         context = {

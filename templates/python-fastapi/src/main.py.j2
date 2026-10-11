@@ -1,0 +1,21 @@
+from fastapi import FastAPI
+
+app = FastAPI(
+    title="{{ project_name }}",
+    description="{{ description }}",
+    version="0.1.0",
+)
+
+
+@app.get("/health")
+async def health_check() -> dict[str, str]:
+    return {"status": "ok", "project": "{{ project_name }}"}
+
+
+def run() -> None:
+    import uvicorn
+    uvicorn.run("src.main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+if __name__ == "__main__":
+    run()

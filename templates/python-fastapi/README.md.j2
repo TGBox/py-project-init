@@ -14,14 +14,23 @@
 
 ```bash
 uv sync
-uv run uvicorn src.{{ project_slug }}.main:app --reload
+
+# Server starten
+uv run main
+# oder:
+uv run {{ project_name }}
+# oder mit uv direkt:
+uv run uvicorn src.main:app --reload
 ```
 
 ## Tests
 
 ```bash
+uv run test
+# oder:
 uv run pytest
-uv run ruff check .
+uv run lint
+uv run format
 ```
 
 ## Docker

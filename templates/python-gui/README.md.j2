@@ -10,11 +10,21 @@
 - Qt 6 (wird automatisch über uv installiert)
 {% endif %}
 
-## Setup
+## Setup & Ausführung
 
 ```bash
 uv sync
-uv run python -m {{ project_slug }}
+
+# GUI starten
+uv run main
+# oder:
+uv run {{ project_name }}
+
+# Tests ausführen
+uv run test
+
+# Standalone-Exe mit PyInstaller bauen
+uv run build
 ```
 
 ## Framework
@@ -26,12 +36,12 @@ Dieses Projekt verwendet **{% if framework == "pyside6" %}PySide6{% elif framewo
 ```
 {{ project_name }}/
 ├── src/
-│   └── {{ project_slug }}/
-│       ├── __init__.py
-│       ├── __main__.py
-│       └── ui/
-│           └── main_window.py
+│   ├── __init__.py
+│   ├── main.py
+│   ├── build.py
+│   └── tools.py
 ├── tests/
+│   └── test_main.py
 ├── pyproject.toml
 └── README.md
 ```

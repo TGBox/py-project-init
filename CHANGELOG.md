@@ -2,6 +2,7 @@
 
 ## SemVer v2.0.1
 
+- 2026-10-11 (04fb5bb): fix(config): new projects are now not getting their dashes replaced by underscores in the script names and subfolders, feat!(scripts): added new default selection of scripts to include in the newly generated projects
 - 2026-10-10 (e9ffd5a): fix(hooks): optimize hook workflow to prevent a semver bump when a commit message was configured incorrectly
 - 2026-10-10 (f030481): fix(changelog): add newly generated changelog file
 
@@ -11,7 +12,7 @@
 
 ## SemVer v1.0.0
 
-- 2026-10-11 (62dd5a9): fix!: hook logic adjustments to allow for semver bumps as major, adjust spec file for new version
+- 2026-10-11 (ec11295): fix!: hook logic adjustments to allow for semver bumps as major, adjust spec file for new version
 - 2026-10-10 (c08fd7d): feat(hooks): update post-commit hook template and add new option in the setup to configure automated tagging in git
 - 2026-10-10 (bb0ac39): fix generation of the agents.md file so that it adheres to markdownlint standards
 - 2026-10-09 (4137bb3): changed agent reference skill files
