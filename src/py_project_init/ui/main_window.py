@@ -68,7 +68,10 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("DaniBani", "PyProjectInit")
 
         # Template initialization
-        base_dir = Path(__file__).resolve().parent.parent.parent.parent
+        if getattr(sys, "frozen", False):
+            base_dir = Path(sys._MEIPASS)
+        else:
+            base_dir = Path(__file__).resolve().parent.parent.parent.parent
         self.default_templates_dir = base_dir / "templates"
 
         # Load any custom templates directories from settings

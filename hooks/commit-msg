@@ -21,8 +21,8 @@ if echo "$FIRST_LINE" | grep -Eq '^(Merge|Revert|fixup!|squash!)'; then
 fi
 
 # Conventional Commits Regex:
-# Typ(Scope optional)!: Mind. 5 Zeichen Beschreibung
-PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_.-]+\))?!?: .{5,}'
+# Unterstützt Standard-Typen, den Typ 'breaking', das '!' Flag sowie 'BREAKING CHANGE:'
+PATTERN='^((feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|breaking)(\([a-zA-Z0-9_.-]+\))?!?:|(BREAKING[ -]CHANGE:)) .{5,}'
 
 if ! echo "$FIRST_LINE" | grep -Eq "$PATTERN"; then
     echo "----------------------------------------------------------------" >&2
@@ -30,8 +30,16 @@ if ! echo "$FIRST_LINE" | grep -Eq "$PATTERN"; then
     echo "Die Nachricht muss dem 'Conventional Commits'-Standard folgen:" >&2
     echo "  <typ>(<scope>): <kurze beschreibung>" >&2
     echo "" >&2
-    echo "Gültige Typen: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert" >&2
-    echo "Beispiel: feat(auth): implement jwt token verification" >&2
+    echo "Gültige Typen:" >&2
+    echo "  • feat                -> Neues Feature (führt zu Minor SemVer Bump)" >&2
+    echo "  • fix, perf           -> Bugfix / Optimierung (führt zu Patch SemVer Bump)" >&2
+    echo "  • docs, style, refactor, test, build, ci, chore, revert" >&2
+    echo "" >&2
+    echo "Für Major Updates (Breaking Changes):" >&2
+    echo "  • Ausrufezeichen '!' vor dem Doppelpunkt: z.B. 'feat!: neue API-Struktur' oder 'fix(api)!: ...'" >&2
+    echo "  • Typ 'breaking': z.B. 'breaking: drop deprecated endpoints' oder 'breaking(auth): ...'" >&2
+    echo "  • Oder Präfix: 'BREAKING CHANGE: beschreibung'" >&2
+    echo "" >&2
     echo "Ihre Eingabe war: '$FIRST_LINE'" >&2
     echo "----------------------------------------------------------------" >&2
     exit 1

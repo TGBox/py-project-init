@@ -5,7 +5,11 @@ a = Analysis(
     ['src/py_project_init/ui/main_window.py'],
     pathex=[],
     binaries=[],
-    datas=[('templates', 'templates')],
+    datas=[
+        ('templates', 'templates'),
+        ('assets', 'assets'),
+        ('hooks', 'hooks'),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

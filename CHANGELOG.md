@@ -11,7 +11,8 @@
 
 ## SemVer v1.0.0
 
-- 2026-10-10 (1d84099): feat(hooks): update post-commit hook template and add new option in the setup to configure automated tagging in git
+- 2026-10-11 (62dd5a9): fix!: hook logic adjustments to allow for semver bumps as major, adjust spec file for new version
+- 2026-10-10 (c08fd7d): feat(hooks): update post-commit hook template and add new option in the setup to configure automated tagging in git
 - 2026-10-10 (bb0ac39): fix generation of the agents.md file so that it adheres to markdownlint standards
 - 2026-10-09 (4137bb3): changed agent reference skill files
 - 2026-10-09 (66bc8fa): feat(ui): optimize GUI layout with 2-column master-detail splitter, tabs, and live inspector card

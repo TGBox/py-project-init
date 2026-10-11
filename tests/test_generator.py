@@ -212,38 +212,63 @@ class TestTemplateManager(unittest.TestCase):
             self.assertIn("{{ project_name }}", readme_j2)
 
 
+    def _assert_markdownlint_compliant(self, content: str):
+        # Must end with single newline
+        self.assertTrue(content.endswith("\n"))
+        self.assertFalse(content.endswith("\n\n"))
+
+        lines = content.split("\n")
+        for i, line in enumerate(lines):
+            if line.startswith("#"):
+                # Heading must be followed by a blank line
+                if i + 1 < len(lines):
+                    self.assertEqual(
+                        lines[i + 1],
+                        "",
+                        f"Heading at line {i+1} ('{line}') must be followed by a blank line."
+                    )
+                # Heading must be preceded by a blank line if not first line
+                if i > 0:
+                    self.assertEqual(
+                        lines[i - 1],
+                        "",
+                        f"Heading at line {i+1} ('{line}') must be preceded by a blank line."
+                    )
+
     def test_agents_md_markdownlint_compliance(self):
-        """Verifies that AGENTS.md complies with Markdownlint rules (e.g. blank lines after headings)."""
+        """Verifies that AGENTS.md complies with Markdownlint rules both on generation and retrofit."""
         with tempfile.TemporaryDirectory() as temp_dir:
+            # 1. Retrofit test
             proj_dir = Path(temp_dir) / "test_proj"
             proj_dir.mkdir()
             self.manager.retrofit_agent_configs(proj_dir, ["general_guidelines"], ["code-review"])
 
             agents_md_path = proj_dir / "AGENTS.md"
             self.assertTrue(agents_md_path.exists())
-            content = agents_md_path.read_text(encoding="utf-8")
+            self._assert_markdownlint_compliant(agents_md_path.read_text(encoding="utf-8"))
 
-            # Must end with single newline
-            self.assertTrue(content.endswith("\n"))
-            self.assertFalse(content.endswith("\n\n"))
-
-            lines = content.split("\n")
-            for i, line in enumerate(lines):
-                if line.startswith("#"):
-                    # Heading must be followed by a blank line
-                    if i + 1 < len(lines):
-                        self.assertEqual(
-                            lines[i + 1],
-                            "",
-                            f"Heading at line {i+1} ('{line}') must be followed by a blank line."
-                        )
-                    # Heading must be preceded by a blank line if not first line
-                    if i > 0:
-                        self.assertEqual(
-                            lines[i - 1],
-                            "",
-                            f"Heading at line {i+1} ('{line}') must be preceded by a blank line."
-                        )
+            # 2. New project generation test
+            new_proj_dir = Path(temp_dir) / "new_proj"
+            context = {
+                "project_name": "new_proj",
+                "project_slug": "new_proj",
+                "description": "Compliance test",
+                "author": "Tester",
+                "author_email": "tester@example.com",
+                "license": "MIT",
+                "custom_scripts": {},
+                "docker": False,
+                "github_actions": False,
+                "vscode": False,
+                "enable_git_hooks": False,
+                "enable_agent_configs": True,
+                "selected_agent_rules": ["general_guidelines", "python_standards"],
+                "selected_agent_skills": ["code-review"],
+            }
+            self.manager.generate(new_proj_dir, "python-cli", context, log_callback=lambda msg: None)
+            gen_agents_md = new_proj_dir / "AGENTS.md"
+            self.assertTrue(gen_agents_md.exists())
+            self._assert_markdownlint_compliant(gen_agents_md.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ FIRST_LINE=$(echo "$LAST_COMMIT_MSG" | head -n 1 | sed -e 's/^[[:space:]]*//' -e
 DEFAULT_CHOICE="s"
 RECOMMENDED_NAME="Überspringen"
 
-if echo "$LAST_COMMIT_MSG" | grep -Eq 'BREAKING CHANGE' || echo "$FIRST_LINE" | grep -Eq '^[a-zA-Z0-9_-]+(\([^)]+\))?!:'; then
+if echo "$LAST_COMMIT_MSG" | grep -Eq 'BREAKING[ -]CHANGE' || echo "$FIRST_LINE" | grep -Eq '^[a-zA-Z0-9_-]+(\([^)]+\))?!:' || echo "$FIRST_LINE" | grep -Eq '^breaking(\([^)]+\))?:'; then
   DEFAULT_CHOICE="3"
   RECOMMENDED_NAME="Major"
 elif echo "$FIRST_LINE" | grep -Eq '^feat(\([^)]+\))?:'; then

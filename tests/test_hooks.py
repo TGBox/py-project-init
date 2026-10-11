@@ -76,6 +76,24 @@ class TestGitHooks(unittest.TestCase):
                 text=True
             )
             self.assertEqual(res_good.returncode, 0, f"commit-msg failed on valid message: {res_good.stderr}")
+
+            # Verify breaking change message variants succeed
+            for valid_breaking in [
+                "feat!: breaking api change here\n",
+                "breaking: drop legacy database support\n",
+                "breaking(auth): change token header\n",
+                "BREAKING CHANGE: drop v1 endpoints\n",
+            ]:
+                with tempfile.NamedTemporaryFile("w+", delete=False, encoding="utf-8") as bf:
+                    bf.write(valid_breaking)
+                    bf.flush()
+                    bf_path = bf.name
+                try:
+                    res = subprocess.run([self.bash, str(hook_path), bf_path], capture_output=True, text=True)
+                    self.assertEqual(res.returncode, 0, f"Failed on valid breaking message '{valid_breaking.strip()}': {res.stderr}")
+                finally:
+                    if os.path.exists(bf_path):
+                        os.remove(bf_path)
         finally:
             if os.path.exists(bad_msg_path):
                 os.remove(bad_msg_path)

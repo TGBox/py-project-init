@@ -14,6 +14,7 @@ class TemplateManager:
         hooks_dir: Path | None = None,
         agent_configs_dir: Path | None = None,
     ):
+        self.default_templates_dir: Path = templates_dir
         self.templates_dirs: list[Path] = [templates_dir]
         if custom_dirs:
             for d in custom_dirs:
@@ -167,7 +168,13 @@ class TemplateManager:
             check_cancel()
             selected_rules = context.get("selected_agent_rules", [])
             selected_skills = context.get("selected_agent_skills", [])
-            self._install_agent_configs(target_dir, selected_rules, selected_skills, log_callback)
+            self._install_agent_configs(
+                target_dir,
+                selected_rules,
+                selected_skills,
+                log_callback,
+                project_name=context.get("project_name")
+            )
 
         # 5. Dateien & Ordnerstrukturen rendern
         file_conditions: list[dict] = template_meta.get("file_conditions", [])
@@ -316,7 +323,8 @@ class TemplateManager:
         target_dir: Path,
         selected_rules: list[str],
         selected_skills: list[str],
-        log_callback
+        log_callback,
+        project_name: str | None = None
     ):
         """Copies chosen rules and skills into .agents/ and generates AGENTS.md."""
         agents_dir = target_dir / ".agents"
@@ -356,7 +364,8 @@ class TemplateManager:
         # Generate AGENTS.md in project root
         agents_md_content = self._generate_agents_md_content(
             active_rules_info,
-            active_skills_info
+            active_skills_info,
+            project_name=project_name or target_dir.name
         )
         (target_dir / "AGENTS.md").write_text(agents_md_content, encoding="utf-8")
         log_callback("AGENTS.md im Projektstamm generiert.")
@@ -405,9 +414,8 @@ class TemplateManager:
             "1. Lies vor größeren Änderungen die anwendbaren Regeln in `.agents/rules/`.",
             "2. Verwende die Skills in `.agents/skills/` für automatisierte Workflows wie Reviews und Tests.",
             "3. Behalte die Projektstruktur sauber und folge den etablierten Konventionen.",
-            "",
         ])
-        return "\n".join(lines)
+        return "\n".join(lines).rstrip() + "\n"
 
     def preview(self, template_id: str, context: dict) -> dict[str, dict]:
         """Generates an in-memory simulation of the resulting project structure and files."""
@@ -561,10 +569,17 @@ class TemplateManager:
         target_dir: Path,
         selected_rules: list[str],
         selected_skills: list[str],
-        log_callback=print
+        log_callback=print,
+        project_name: str | None = None
     ):
         """Retrofits agent rules, skills, and AGENTS.md into an existing project folder."""
-        self._install_agent_configs(target_dir, selected_rules, selected_skills, log_callback)
+        self._install_agent_configs(
+            target_dir,
+            selected_rules,
+            selected_skills,
+            log_callback,
+            project_name=project_name or target_dir.name
+        )
 
     def create_template_from_project(
         self,
@@ -585,7 +600,8 @@ class TemplateManager:
 
         ignored_names = {
             ".git", ".venv", "venv", "__pycache__", "node_modules",
-            "target", "dist", "build", ".idea", ".vscode"
+            "target", "dist", "build", ".idea", ".vscode",
+            ".agents", "AGENTS.md"
         }
 
         source_name = source_dir.name
