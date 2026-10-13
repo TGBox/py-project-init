@@ -23,8 +23,8 @@ _VALID_NAME = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*$")
 
 class GenerateWorker(QThread):
     log_signal = Signal(str)
-    # ok, target_dir_str, was_cancelled
-    finished_signal = Signal(bool, str, bool)
+    # ok, target_dir_str, was_cancelled, problems
+    finished_signal = Signal(bool, str, bool, list)
 
     def __init__(self, generator: TemplateManager, target_dir: Path, template_id: str, context: dict):
         super().__init__()
@@ -41,20 +41,20 @@ class GenerateWorker(QThread):
 
     def run(self):
         try:
-            self.generator.generate(
+            problems = self.generator.generate(
                 self.target_dir,
                 self.template_id,
                 self.context,
                 log_callback=self.log_signal.emit,
                 is_cancelled=lambda: self._cancelled or self.isInterruptionRequested()
             )
-            self.finished_signal.emit(True, str(self.target_dir), False)
+            self.finished_signal.emit(True, str(self.target_dir), False, problems or [])
         except InterruptedError:
             self.log_signal.emit("\n⚠ Vorgang wurde durch den Benutzer abgebrochen.")
-            self.finished_signal.emit(False, "", True)
+            self.finished_signal.emit(False, "", True, [])
         except Exception as e:
             self.log_signal.emit(f"\nFehler: {str(e)}")
-            self.finished_signal.emit(False, "", False)
+            self.finished_signal.emit(False, "", False, [])
 
 
 class MainWindow(QMainWindow):
@@ -1345,7 +1345,9 @@ class MainWindow(QMainWindow):
             self.log_view.append("⏳ Abbruch angefordert...")
             self.worker.cancel()
 
-    def _on_generation_finished(self, ok: bool, target_dir_str: str, was_cancelled: bool):
+    def _on_generation_finished(
+        self, ok: bool, target_dir_str: str, was_cancelled: bool, problems: list | None = None
+    ):
         """Handles completion of generation worker."""
         self.run_btn.setEnabled(self.tool_statuses.get("git", False))
         self.preview_btn.setEnabled(True)
@@ -1358,6 +1360,24 @@ class MainWindow(QMainWindow):
                 self,
                 "Vorgang abgebrochen",
                 "Die Initialisierung wurde wie gewünscht abgebrochen."
+            )
+        elif ok and problems:
+            self._last_target_dir = target_dir_str
+            count = len(problems)
+            self.log_view.append(
+                f"\n⚠ Projekt angelegt, aber {count} Schritt(e) sind fehlgeschlagen: {target_dir_str}"
+            )
+            for problem in problems:
+                self.log_view.append(f"   ✖ {problem}")
+            self.log_view.append("   Details zu jedem Fehler stehen weiter oben im Log.")
+            self.launcher_widget.setVisible(True)
+            self.statusBar().showMessage(f"Projekt mit {count} Fehler(n) angelegt in {target_dir_str}", 0)
+            QMessageBox.warning(
+                self,
+                "Projekt mit Fehlern angelegt",
+                f"Das Projekt wurde angelegt, aber {count} Schritt(e) sind fehlgeschlagen:\n\n"
+                + "\n".join(f"• {p}" for p in problems)
+                + f"\n\n{target_dir_str}",
             )
         elif ok:
             self._last_target_dir = target_dir_str

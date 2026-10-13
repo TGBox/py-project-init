@@ -129,6 +129,16 @@ def run_cli(args: list[str] | None = None) -> int:
         return 1
 
     print(f"\nInitialisiere '{parsed.name}' mit Vorlage '{template_id}'...")
-    manager.generate(target_dir, template_id, context, log_callback=print)
+    problems = manager.generate(target_dir, template_id, context, log_callback=print)
+    if problems:
+        print(
+            f"\n⚠ Projekt angelegt in:\n  {target_dir}\n"
+            f"aber {len(problems)} Schritt(e) sind fehlgeschlagen:",
+            file=sys.stderr,
+        )
+        for problem in problems:
+            print(f"  ✖ {problem}", file=sys.stderr)
+        print("Details zu jedem Fehler stehen weiter oben in der Ausgabe.\n", file=sys.stderr)
+        return 1
     print(f"\n✔ Projekt erfolgreich erstellt in:\n  {target_dir}\n")
     return 0

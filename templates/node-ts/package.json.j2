@@ -11,12 +11,12 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"{% if custom_scripts %}{% for s_name, s_cmd in custom_scripts.items() %},
-    "{{ s_name }}": "{{ s_cmd }}"{% endfor %}{% endif %}
+{% set scripts = {"build": "tsc", "start": "node dist/index.js", "dev": "tsx watch src/index.ts", "test": "vitest run", "typecheck": "tsc --noEmit"} %}
+{% if custom_scripts %}{% set _ = scripts.update(custom_scripts) %}{% endif %}
+{% for s_name, s_cmd in scripts.items() %}
+    "{{ s_name }}": "{{ s_cmd }}"{% if not loop.last %},{% endif %}
+
+{% endfor %}
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

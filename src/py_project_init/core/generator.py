@@ -6,6 +6,17 @@ import yaml
 from jinja2 import Environment, FileSystemLoader
 
 
+def _summarize_output(text: str, max_len: int = 240) -> str:
+    """Condenses tool output to the most telling error lines for the final summary."""
+    lines = [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+    if not lines:
+        return "keine Ausgabe"
+    key = [ln for ln in lines if ln.lower().startswith(("error", "fehler", "caused by", "fatal"))]
+    picked = key[:2] if key else lines[:1]
+    summary = " | ".join(picked)
+    return summary if len(summary) <= max_len else summary[: max_len - 1] + "…"
+
+
 class TemplateManager:
     def __init__(
         self,
@@ -128,7 +139,10 @@ class TemplateManager:
 
         return {"rules": recommended_rules, "skills": recommended_skills}
 
-    def generate(self, target_dir: Path, template_id: str, context: dict, log_callback=print, is_cancelled=None):
+    def generate(
+        self, target_dir: Path, template_id: str, context: dict, log_callback=print, is_cancelled=None
+    ) -> list[str]:
+        """Creates the project and returns a list of failed steps (empty list = everything worked)."""
         def check_cancel():
             if is_cancelled and is_cancelled():
                 raise InterruptedError("Initialisierung durch Benutzer abgebrochen.")
@@ -140,6 +154,7 @@ class TemplateManager:
         template_path: Path = template_meta["path"]
         env = Environment(loader=FileSystemLoader(template_path))
         target_dir.mkdir(parents=True, exist_ok=True)
+        problems: list[str] = []
 
         # 1. Optionale Pre-Init Hooks (z.B. uv init, uv venv)
         pre_init_hooks = template_meta.get("hooks", {}).get("pre_init", [])
@@ -148,13 +163,16 @@ class TemplateManager:
             log_callback(f"Führe Pre-Init Schritt aus: {' '.join(cmd)}")
             res = subprocess.run(cmd, cwd=target_dir, capture_output=True, text=True, shell=True)
             if res.returncode != 0:
-                log_callback(f"Warnung bei Pre-Init: {res.stderr.strip() or res.stdout.strip()}")
+                output = res.stderr.strip() or res.stdout.strip()
+                log_callback(f"✖ Fehler bei Pre-Init (Exit-Code {res.returncode}): {output}")
+                problems.append(f"Pre-Init '{' '.join(cmd)}': {_summarize_output(output)}")
             elif res.stdout.strip():
                 log_callback(res.stdout.strip())
 
         # 2. Git Repository initialisieren
         check_cancel()
-        self._init_git_repo(target_dir, log_callback)
+        if not self._init_git_repo(target_dir, log_callback):
+            problems.append("Git-Repository konnte nicht initialisiert werden (git init).")
 
         # 3. Git Hooks einrichten (falls ausgewählt)
         if context.get("enable_git_hooks", False):
@@ -245,13 +263,17 @@ class TemplateManager:
             log_callback(f"Führe Hook aus: {' '.join(cmd)}")
             res = subprocess.run(cmd, cwd=target_dir, capture_output=True, text=True, shell=True)
             if res.returncode != 0:
-                log_callback(f"Warnung bei Hook: {res.stderr.strip()}")
+                output = res.stderr.strip() or res.stdout.strip()
+                log_callback(f"✖ Fehler bei Hook (Exit-Code {res.returncode}): {output}")
+                problems.append(f"Hook '{' '.join(cmd)}': {_summarize_output(output)}")
             elif res.stdout.strip():
                 log_callback(res.stdout.strip())
 
         # 7. Initialer Commit mit --no-verify
         check_cancel()
-        self._commit_initial(target_dir, log_callback, is_cancelled=is_cancelled)
+        problems.extend(self._commit_initial(target_dir, log_callback, is_cancelled=is_cancelled))
+
+        return problems
 
     def _should_include(self, rel_path: Path, filename: str, conditions: list[dict], context: dict) -> bool:
         """Returns False if a when-condition is not met."""
@@ -278,15 +300,16 @@ class TemplateManager:
                 existing_set.add(stripped)
         return "\n".join(merged) + "\n"
 
-    def _init_git_repo(self, target_dir: Path, log_callback):
-        """Initializes git repository if not already present."""
+    def _init_git_repo(self, target_dir: Path, log_callback) -> bool:
+        """Initializes git repository if not already present. Returns False if git init failed."""
         if not (target_dir / ".git").exists():
             log_callback("Initialisiere Git Repository...")
             res = subprocess.run(["git", "init"], cwd=target_dir, capture_output=True, text=True)
             if res.returncode != 0:
-                log_callback(f"Git-Meldung: {res.stderr.strip() or res.stdout.strip()}")
-            else:
-                log_callback("Erfolg: git init")
+                log_callback(f"✖ Git-Fehler: {res.stderr.strip() or res.stdout.strip()}")
+                return False
+            log_callback("Erfolg: git init")
+        return True
 
     def _install_git_hooks(
         self,
@@ -673,8 +696,9 @@ class TemplateManager:
         self.reload_templates()
         return target_tpl_dir
 
-    def _commit_initial(self, target_dir: Path, log_callback, is_cancelled=None):
-        """Stages all files and creates initial commit using --no-verify."""
+    def _commit_initial(self, target_dir: Path, log_callback, is_cancelled=None) -> list[str]:
+        """Stages all files and creates initial commit using --no-verify. Returns failed steps."""
+        problems: list[str] = []
         log_callback("Erstelle initialen Git Commit...")
         commands = [
             ["git", "add", "."],
@@ -685,9 +709,12 @@ class TemplateManager:
                 raise InterruptedError("Initialisierung durch Benutzer abgebrochen.")
             res = subprocess.run(cmd, cwd=target_dir, capture_output=True, text=True)
             if res.returncode != 0:
-                log_callback(f"Git-Meldung: {res.stderr.strip() or res.stdout.strip()}")
+                output = res.stderr.strip() or res.stdout.strip()
+                log_callback(f"✖ Git-Fehler: {output}")
+                problems.append(f"'{' '.join(cmd[:2])}': {_summarize_output(output)}")
             else:
                 log_callback(f"Erfolg: {' '.join(cmd)}")
+        return problems
 
 
 # Backward compatibility alias

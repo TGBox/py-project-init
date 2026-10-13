@@ -317,6 +317,31 @@ class TestTemplateManager(unittest.TestCase):
             self._assert_markdownlint_compliant(gen_agents_md.read_text(encoding="utf-8"))
 
 
+    def test_generate_reports_failed_hooks(self):
+        """A failing post-create hook must be returned as a problem instead of being swallowed."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tpl_root = Path(temp_dir) / "templates"
+            tpl_dir = tpl_root / "broken"
+            tpl_dir.mkdir(parents=True)
+            (tpl_dir / "template.yaml").write_text(
+                'name: "Broken"\n'
+                'language: "Python"\n'
+                "hooks:\n"
+                "  post_create:\n"
+                '    - ["git", "--definitely-not-an-option"]\n',
+                encoding="utf-8",
+            )
+            (tpl_dir / "README.md.j2").write_text("# {{ project_name }}\n", encoding="utf-8")
+
+            manager = TemplateManager(tpl_root)
+            target_dir = Path(temp_dir) / "out"
+            context = {"project_name": "out", "custom_scripts": {}}
+            problems = manager.generate(target_dir, "broken", context, log_callback=lambda msg: None)
+
+            self.assertTrue((target_dir / "README.md").exists())
+            self.assertEqual(len(problems), 1)
+            self.assertIn("git --definitely-not-an-option", problems[0])
+
 if __name__ == "__main__":
     unittest.main()
 
