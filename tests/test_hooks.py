@@ -293,7 +293,169 @@ class TestGitHooks(unittest.TestCase):
             follow_tags = subprocess.check_output(["git", "config", "--get", "push.followTags"], cwd=proj, text=True).strip()
             self.assertEqual(follow_tags, "true")
 
+    def test_post_commit_auto_bump_typescript(self):
+        """Verifies that non-interactive commit in a Node/TS project bumps package.json according to Conventional Commits."""
+        import shutil
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.autotag", "true"], cwd=proj, check=True)
+
+            hooks_dir = proj / ".git" / "hooks"
+            shutil.copy2(self.hooks_dir / "pre-commit", hooks_dir / "pre-commit")
+            shutil.copy2(self.hooks_dir / "commit-msg", hooks_dir / "commit-msg")
+            shutil.copy2(self.hooks_dir / "post-commit", hooks_dir / "post-commit")
+
+            pkg = proj / "package.json"
+            pkg.write_text('{\n  "name": "ts-test",\n  "version": "0.1.0"\n}\n', encoding="utf-8")
+            (proj / "index.ts").write_text("console.log('v1');\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+
+            env = os.environ.copy()
+            env["GIT_HOOKS_NON_INTERACTIVE"] = "1"
+
+            # 1. feat -> minor bump (0.1.0 -> 0.2.0)
+            res1 = subprocess.run(
+                ["git", "commit", "-m", "feat: add user authentication"],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(res1.returncode, 0, f"feat commit failed: {res1.stderr}")
+            self.assertIn('"version": "0.2.0"', pkg.read_text(encoding="utf-8"))
+            tags = subprocess.check_output(["git", "tag", "-l"], cwd=proj, text=True).splitlines()
+            self.assertIn("v0.2.0", tags)
+
+            # 2. fix -> patch bump (0.2.0 -> 0.2.1)
+            (proj / "index.ts").write_text("console.log('v2');\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            res2 = subprocess.run(
+                ["git", "commit", "-m", "fix: resolve token expiry bug"],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(res2.returncode, 0, f"fix commit failed: {res2.stderr}")
+            self.assertIn('"version": "0.2.1"', pkg.read_text(encoding="utf-8"))
+            tags = subprocess.check_output(["git", "tag", "-l"], cwd=proj, text=True).splitlines()
+            self.assertIn("v0.2.1", tags)
+
+            # 3. feat! -> major bump (0.2.1 -> 1.0.0)
+            (proj / "index.ts").write_text("console.log('v3');\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            res3 = subprocess.run(
+                ["git", "commit", "-m", "feat!: breaking change to auth API"],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(res3.returncode, 0, f"feat! commit failed: {res3.stderr}")
+            self.assertIn('"version": "1.0.0"', pkg.read_text(encoding="utf-8"))
+            tags = subprocess.check_output(["git", "tag", "-l"], cwd=proj, text=True).splitlines()
+            self.assertIn("v1.0.0", tags)
+
+            # Verify changelog has all sections
+            changelog = (proj / "CHANGELOG.md").read_text(encoding="utf-8")
+            self.assertIn("## SemVer v1.0.0", changelog)
+            self.assertIn("## SemVer v0.2.1", changelog)
+            self.assertIn("## SemVer v0.2.0", changelog)
+
+    def test_post_commit_auto_bump_rust(self):
+        """Verifies that non-interactive commit in a Rust project bumps Cargo.toml according to Conventional Commits."""
+        import shutil
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.autotag", "true"], cwd=proj, check=True)
+
+            hooks_dir = proj / ".git" / "hooks"
+            shutil.copy2(self.hooks_dir / "pre-commit", hooks_dir / "pre-commit")
+            shutil.copy2(self.hooks_dir / "commit-msg", hooks_dir / "commit-msg")
+            shutil.copy2(self.hooks_dir / "post-commit", hooks_dir / "post-commit")
+
+            cargo = proj / "Cargo.toml"
+            cargo.write_text('[package]\nname = "rust-test"\nversion = "0.1.0"\nedition = "2021"\n', encoding="utf-8")
+            (proj / "main.rs").write_text("fn main() {}\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+
+            env = os.environ.copy()
+            env["GIT_HOOKS_NON_INTERACTIVE"] = "1"
+
+            # 1. feat -> minor bump (0.1.0 -> 0.2.0)
+            res1 = subprocess.run(
+                ["git", "commit", "-m", "feat(parser): add AST builder"],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(res1.returncode, 0, f"feat commit failed: {res1.stderr}")
+            self.assertIn('version = "0.2.0"', cargo.read_text(encoding="utf-8"))
+            tags = subprocess.check_output(["git", "tag", "-l"], cwd=proj, text=True).splitlines()
+            self.assertIn("v0.2.0", tags)
+
+            # 2. fix(parser)!: breaking change -> major bump (0.2.0 -> 1.0.0)
+            (proj / "main.rs").write_text("fn main() { println!(\"v2\"); }\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            res2 = subprocess.run(
+                ["git", "commit", "-m", "fix(parser)!: replace error types with custom enum"],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(res2.returncode, 0, f"fix! commit failed: {res2.stderr}")
+            self.assertIn('version = "1.0.0"', cargo.read_text(encoding="utf-8"))
+            tags = subprocess.check_output(["git", "tag", "-l"], cwd=proj, text=True).splitlines()
+            self.assertIn("v1.0.0", tags)
+
+            # Verify changelog has all sections
+            changelog = (proj / "CHANGELOG.md").read_text(encoding="utf-8")
+            self.assertIn("## SemVer v1.0.0", changelog)
+            self.assertIn("## SemVer v0.2.0", changelog)
+
+    def test_post_commit_non_bumping_commit_types(self):
+        """Verifies that non-bumping commits (docs, chore, style) do not bump version."""
+        import shutil
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+
+            hooks_dir = proj / ".git" / "hooks"
+            shutil.copy2(self.hooks_dir / "pre-commit", hooks_dir / "pre-commit")
+            shutil.copy2(self.hooks_dir / "commit-msg", hooks_dir / "commit-msg")
+            shutil.copy2(self.hooks_dir / "post-commit", hooks_dir / "post-commit")
+
+            pkg = proj / "package.json"
+            pkg.write_text('{\n  "name": "ts-test",\n  "version": "1.0.0"\n}\n', encoding="utf-8")
+            (proj / "README.md").write_text("# Hello\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+
+            env = os.environ.copy()
+            env["GIT_HOOKS_NON_INTERACTIVE"] = "1"
+
+            res = subprocess.run(
+                ["git", "commit", "-m", "docs: update getting started guide"],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(res.returncode, 0, f"docs commit failed: {res.stderr}")
+            # Version should NOT have changed
+            self.assertIn('"version": "1.0.0"', pkg.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

@@ -7,12 +7,16 @@ if [ "$GIT_CHANGELOG_RUNNING" = "1" ]; then
 fi
 
 PYTHON_BIN="python3"
-if ! command -v python3 >/dev/null 2>&1 && command -v python >/dev/null 2>&1; then
+if command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1 && python -c "import sys" >/dev/null 2>&1; then
   PYTHON_BIN="python"
+elif command -v py >/dev/null 2>&1 && py -c "import sys" >/dev/null 2>&1; then
+  PYTHON_BIN="py"
 fi
 
 # -----------------------------------------------------------------------------
-# 1. Interaktiver SemVer Bump
+# 1. SemVer Bump (Interaktiv oder automatisch anhand Conventional Commits)
 # -----------------------------------------------------------------------------
 BUMP=""
 
@@ -35,16 +39,15 @@ elif echo "$FIRST_LINE" | grep -Eq '^(fix|perf)(\([^)]+\))?:'; then
   RECOMMENDED_NAME="Patch"
 fi
 
-# Interaktivitätsprüfung: TTY verfügbar und kein automatisierter Modus
+# Interaktivitätsprüfung: TTY verfügbar und kein automatisierter/übersprungener Modus
 INTERACTIVE=0
-if [ -z "$CI" ] && [ "${GIT_HOOKS_NON_INTERACTIVE:-0}" != "1" ]; then
+if [ -z "$CI" ] && [ "${GIT_HOOKS_NON_INTERACTIVE:-0}" != "1" ] && [ "${GIT_HOOKS_SKIP_BUMP:-0}" != "1" ]; then
   if [ "${GIT_HOOKS_FORCE_INTERACTIVE:-0}" = "1" ]; then
     INTERACTIVE=1
-  elif [ -t 0 ] || [ -t 1 ]; then
-    if [ -e /dev/tty ]; then
-      exec < /dev/tty 2>/dev/null || true
-      INTERACTIVE=1
-    elif [ -t 0 ]; then
+  elif [ -t 0 ]; then
+    INTERACTIVE=1
+  elif [ -t 1 ] || [ -t 2 ]; then
+    if [ -e /dev/tty ] && exec < /dev/tty 2>/dev/null; then
       INTERACTIVE=1
     fi
   fi
@@ -71,6 +74,21 @@ import json
 try:
     with open('package.json', 'r', encoding='utf-8') as f:
         print(json.load(f).get('version', ''))
+except Exception:
+    pass
+EOF
+)
+  elif [ -f "Cargo.toml" ]; then
+    CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import re
+try:
+    with open('Cargo.toml', 'r', encoding='utf-8') as f:
+        content = f.read()
+        m = re.search(r'(?ms)^\[package\].*?^version\s*=\s*"(\d+\.\d+\.\d+)"', content)
+        if not m:
+            m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', content)
+        if m:
+            print(m.group(1))
 except Exception:
     pass
 EOF
@@ -102,10 +120,26 @@ EOF
     s|S|"") echo "Version unverändert gelassen." ;;
     *) echo "Ungültige Auswahl, Version unverändert gelassen." ;;
   esac
+else
+  # Nicht-interaktiver Modus (z. B. VS Code GUI, Windows-Konsole ohne TTY, automatisierte Tools)
+  # Automatischer SemVer-Bump basierend auf Conventional Commits
+  if [ "${GIT_HOOKS_SKIP_BUMP:-0}" != "1" ]; then
+    case "$DEFAULT_CHOICE" in
+      1) BUMP="patch" ;;
+      2) BUMP="minor" ;;
+      3) BUMP="major" ;;
+      *) BUMP="" ;;
+    esac
+    if [ -n "$BUMP" ]; then
+      echo "Automatischer SemVer Bump ($BUMP) basierend auf Commit: $FIRST_LINE"
+    fi
+  fi
 fi
 
 if [ -n "$BUMP" ]; then
+  # ---------------------------------------------------------------------------
   # Python-Projekt (pyproject.toml & uv.lock)
+  # ---------------------------------------------------------------------------
   if [ -f "pyproject.toml" ]; then
     "$PYTHON_BIN" -c "
 import re, sys
@@ -146,14 +180,117 @@ if m:
     fi
   fi
 
-  # Node-Projekt (package.json)
+  # ---------------------------------------------------------------------------
+  # Node/TypeScript-Projekt (package.json & package-lock.json)
+  # ---------------------------------------------------------------------------
   if [ -f "package.json" ]; then
+    BUMPED_NPM=0
     if command -v npm >/dev/null 2>&1; then
-      npm version "$BUMP" --no-git-tag-version
+      if npm version "$BUMP" --no-git-tag-version 2>/dev/null; then
+        BUMPED_NPM=1
+        git add package.json
+        if [ -f "package-lock.json" ]; then
+          git add package-lock.json
+        fi
+      fi
+    fi
+
+    # Fallback mit Python falls npm nicht verfügbar ist oder fehlschlug
+    if [ "$BUMPED_NPM" = "0" ]; then
+      "$PYTHON_BIN" -c "
+import re, json
+
+part = '$BUMP'
+file = 'package.json'
+
+with open(file, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+m = re.search(r'(\"version\"\s*:\s*\")(\d+)\.(\d+)\.(\d+)(\")', content)
+if m:
+    major, minor, patch = int(m.group(2)), int(m.group(3)), int(m.group(4))
+    if part == 'major':
+        major += 1
+        minor = 0
+        patch = 0
+    elif part == 'minor':
+        minor += 1
+        patch = 0
+    elif part == 'patch':
+        patch += 1
+
+    new_ver = f'{major}.{minor}.{patch}'
+    content = content[:m.start()] + f'{m.group(1)}{new_ver}{m.group(5)}' + content[m.end():]
+
+    with open(file, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+    print(f'package.json: {m.group(2)}.{m.group(3)}.{m.group(4)} -> {new_ver}')
+
+    try:
+        with open('package-lock.json', 'r', encoding='utf-8') as lf:
+            lock_data = json.load(lf)
+        lock_data['version'] = new_ver
+        if 'packages' in lock_data and '' in lock_data['packages']:
+            lock_data['packages']['']['version'] = new_ver
+        with open('package-lock.json', 'w', encoding='utf-8') as lf:
+            json.dump(lock_data, lf, indent=2)
+            lf.write('\n')
+    except Exception:
+        pass
+"
       git add package.json
       if [ -f "package-lock.json" ]; then
         git add package-lock.json
       fi
+    fi
+  fi
+
+  # ---------------------------------------------------------------------------
+  # Rust-Projekt (Cargo.toml & Cargo.lock)
+  # ---------------------------------------------------------------------------
+  if [ -f "Cargo.toml" ]; then
+    "$PYTHON_BIN" -c "
+import re
+
+part = '$BUMP'
+file = 'Cargo.toml'
+
+with open(file, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+m = re.search(r'(?ms)(^\[package\].*?^version\s*=\s*\")(\d+)\.(\d+)\.(\d+)(\")', content)
+if not m:
+    m = re.search(r'(^version\s*=\s*\")(\d+)\.(\d+)\.(\d+)(\")', content, flags=re.MULTILINE)
+
+if m:
+    major, minor, patch = int(m.group(2)), int(m.group(3)), int(m.group(4))
+    if part == 'major':
+        major += 1
+        minor = 0
+        patch = 0
+    elif part == 'minor':
+        minor += 1
+        patch = 0
+    elif part == 'patch':
+        patch += 1
+
+    new_ver = f'{major}.{minor}.{patch}'
+    old_full = m.group(0)
+    new_full = f'{m.group(1)}{new_ver}{m.group(5)}'
+    content = content.replace(old_full, new_full, 1)
+
+    with open(file, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+    print(f'Cargo.toml: {major}.{minor}.{patch} -> {new_ver}')
+"
+    git add Cargo.toml
+
+    if [ -f "Cargo.lock" ] && command -v cargo >/dev/null 2>&1; then
+      cargo check --quiet 2>/dev/null || cargo metadata --format-version 1 >/dev/null 2>&1 || true
+      git add Cargo.lock
+      echo "Cargo.lock aktualisiert und gestaged."
     fi
   fi
 fi
@@ -198,14 +335,14 @@ for line in raw.splitlines():
         curr["files"].append(line.strip())
 
 def get_version_at_commit(commit_hash):
-    for fname in ("pyproject.toml", "package.json"):
+    for fname in ("pyproject.toml", "package.json", "Cargo.toml"):
         try:
             content = subprocess.check_output(
                 ["git", "show", f"{commit_hash}:{fname}"],
                 stderr=subprocess.DEVNULL,
                 text=True
             )
-            if fname == "pyproject.toml":
+            if fname in ("pyproject.toml", "Cargo.toml"):
                 m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', content)
                 if m:
                     return m.group(1)
@@ -218,10 +355,10 @@ def get_version_at_commit(commit_hash):
     return None
 
 def get_current_working_version():
-    for fname in ("pyproject.toml", "package.json"):
+    for fname in ("pyproject.toml", "package.json", "Cargo.toml"):
         try:
-            if fname == "pyproject.toml" and os.path.isfile("pyproject.toml"):
-                with open("pyproject.toml", "r", encoding="utf-8") as f:
+            if fname in ("pyproject.toml", "Cargo.toml") and os.path.isfile(fname):
+                with open(fname, "r", encoding="utf-8") as f:
                     m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', f.read())
                     if m:
                         return m.group(1)
@@ -242,7 +379,7 @@ working_ver = get_current_working_version()
 
 for i, c in enumerate(commits):
     is_latest = (i == len(commits) - 1)
-    touched = any(f in ("pyproject.toml", "package.json") for f in c["files"])
+    touched = any(f in ("pyproject.toml", "package.json", "Cargo.toml") for f in c["files"])
     
     if is_latest and working_ver:
         # Neueste Version aus Arbeitskopie übernehmen (falls soeben gebumpt oder vorhanden)
@@ -310,6 +447,21 @@ except Exception:
     pass
 EOF
 )
+  elif [ -f "Cargo.toml" ]; then
+    NEW_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import re
+try:
+    with open('Cargo.toml', 'r', encoding='utf-8') as f:
+        content = f.read()
+        m = re.search(r'(?ms)^\[package\].*?^version\s*=\s*"(\d+\.\d+\.\d+)"', content)
+        if not m:
+            m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', content)
+        if m:
+            print(m.group(1))
+except Exception:
+    pass
+EOF
+)
   fi
 
   if [ -n "$NEW_VERSION" ]; then
@@ -323,4 +475,5 @@ EOF
     fi
   fi
 fi
+
 

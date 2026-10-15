@@ -2,7 +2,9 @@
 
 ## SemVer v3.0.1
 
-- 2026-10-15 (60500bb): feat: add new todo.txt file with a new todo
+- 2026-10-15 (c117945): fix!: fix git hooks not accounting for correct semver bumping on projects that aren't python
+- 2026-10-15 (cb10ef6): Merge pull request #1 from TGBox/develop
+- 2026-10-15 (aadbfc5): feat: add new todo.txt file with a new todo
 - 2026-10-15 (b3dc928): feat: test commit from powershell
 - 2026-10-13 (18517c3): feat(templates)!: fix wrongfully configured template files for setup, fix(output): fix output to inform user what errors have occurred
 - 2026-10-11 (515d235): fix(uv): add changed lock file
