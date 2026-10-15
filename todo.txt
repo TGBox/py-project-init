@@ -1,0 +1,1 @@
+(A) Wenn ich ein neues Typescript Projekt mit der App anlege, und in der GUI bei GitHooks den SemVer Bump mit auswähle, dann werde ich weder gefragt ob ich die Versionsnummer erhöhen möchte, noch wird die Art der conventional commit msg dazu genutzt um dies automatisch zu tun. Dies muss geändert werden. +Refactoring @code

@@ -2,7 +2,10 @@
 
 ## SemVer v3.0.1
 
-- 2026-10-11 (b75cae9): fix(uv): add changed lock file
+- 2026-10-15 (60500bb): feat: add new todo.txt file with a new todo
+- 2026-10-15 (b3dc928): feat: test commit from powershell
+- 2026-10-13 (18517c3): feat(templates)!: fix wrongfully configured template files for setup, fix(output): fix output to inform user what errors have occurred
+- 2026-10-11 (515d235): fix(uv): add changed lock file
 - 2026-10-11 (956e7ff): fix(toml): bump semver
 
 ## SemVer v3.0.0
