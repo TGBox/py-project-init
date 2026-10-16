@@ -198,6 +198,13 @@ class TestGitLabClient(unittest.TestCase):
         finally:
             server.shutdown()
 
+    def test_ssl_context_verifies_but_not_strict(self):
+        import ssl
+        ctx = GitLabClient("https://gitlab.example", "t").ssl_context
+        self.assertEqual(ctx.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(ctx.check_hostname)
+        self.assertFalse(ctx.verify_flags & getattr(ssl, "VERIFY_X509_STRICT", 0))
+
     def test_api_url_and_path_encoding(self):
         client = GitLabClient("https://gitlab.data-al.de/", " abc ")
         self.assertEqual(client.api_url, "https://gitlab.data-al.de/api/v4")

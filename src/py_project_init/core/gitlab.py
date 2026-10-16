@@ -1,6 +1,7 @@
 """Minimal GitLab REST client (stdlib only) plus secure token storage helpers."""
 import json
 import os
+import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -16,12 +17,25 @@ class GitLabError(RuntimeError):
         self.status = status
 
 
+def _ssl_context() -> ssl.SSLContext:
+    """Default verification (system trust store), but without Python 3.13+'s X509 strict mode.
+
+    Self-hosted GitLab instances often use internal CA certificates without an Authority Key
+    Identifier, which strict mode rejects ("Missing Authority Key Identifier") although git and
+    browsers accept them. Chain, hostname and expiry are still fully verified.
+    """
+    ctx = ssl.create_default_context()
+    ctx.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)
+    return ctx
+
+
 class GitLabClient:
     def __init__(self, base_url: str, token: str, timeout: float = 20.0):
         self.web_url = base_url.strip().rstrip("/")
         self.api_url = self.web_url + "/api/v4"
         self.token = token.strip()
         self.timeout = timeout
+        self.ssl_context = _ssl_context()
 
     @staticmethod
     def _enc(path: str) -> str:
@@ -36,7 +50,7 @@ class GitLabClient:
             headers={"PRIVATE-TOKEN": self.token, "Content-Type": "application/json"},
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as res:
+            with urllib.request.urlopen(req, timeout=self.timeout, context=self.ssl_context) as res:
                 raw = res.read()
                 return json.loads(raw) if raw else None
         except urllib.error.HTTPError as e:
