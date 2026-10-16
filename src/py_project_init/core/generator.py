@@ -144,6 +144,14 @@ class TemplateManager:
 
         return {"rules": recommended_rules, "skills": recommended_skills}
 
+    def _create_jinja_env(self, template_path: Path) -> Environment:
+        """Creates a Jinja2 Environment with whitespace trimming to prevent unwanted blank lines."""
+        return Environment(
+            loader=FileSystemLoader(template_path),
+            trim_blocks=True,
+            lstrip_blocks=True,
+        )
+
     def generate(
         self, target_dir: Path, template_id: str, context: dict, log_callback=print, is_cancelled=None
     ) -> list[str]:
@@ -157,7 +165,7 @@ class TemplateManager:
             raise ValueError(f"Template '{template_id}' nicht gefunden.")
 
         template_path: Path = template_meta["path"]
-        env = Environment(loader=FileSystemLoader(template_path))
+        env = self._create_jinja_env(template_path)
         target_dir.mkdir(parents=True, exist_ok=True)
         problems: list[str] = []
 
@@ -607,7 +615,7 @@ class TemplateManager:
             raise ValueError(f"Template '{template_id}' nicht gefunden.")
 
         template_path: Path = template_meta["path"]
-        env = Environment(loader=FileSystemLoader(template_path))
+        env = self._create_jinja_env(template_path)
         file_conditions: list[dict] = template_meta.get("file_conditions", [])
         files_map: dict[str, dict] = {}
 

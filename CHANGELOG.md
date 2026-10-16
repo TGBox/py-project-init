@@ -2,7 +2,11 @@
 
 ## SemVer v3.0.1
 
-- 2026-10-16 (1e4f677): fix: hook changes
+- 2026-10-16 (99c7663): fix: fix project.scripts block in python project config having too many empty lines
+- 2026-10-16 (fcd063e): fix: remove problematic additional check against missing key authority in our gitlab certificate authority
+- 2026-10-16 (8f0e920): fix: update uv.lock file
+- 2026-10-16 (e605be6): feat!: add new feature to create gitlab repositories directly and prevent empty ones
+- 2026-10-16 (8745192): fix: hook changes
 - 2026-10-15 (0f5816e): fix!: fix git hooks not accounting for correct semver bumping on projects that aren't python
 - 2026-10-15 (cb10ef6): Merge pull request #1 from TGBox/develop
 - 2026-10-15 (aadbfc5): feat: add new todo.txt file with a new todo

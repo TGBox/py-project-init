@@ -389,6 +389,94 @@ class TestTemplateManager(unittest.TestCase):
             self.assertEqual(len(problems), 1)
             self.assertIn("git --definitely-not-an-option", problems[0])
 
+    def test_pyproject_scripts_and_sections_whitespace_formatting(self):
+        """Verifies that [project.scripts] and [dependency-groups] contain no internal blank lines,
+        and have exactly one blank line separating sections."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "py-forts"
+            context = {
+                "project_name": "py-forts",
+                "project_slug": "py_forts",
+                "description": "Python Forts Game Clone",
+                "author": "Daniel",
+                "author_email": "daniel@example.com",
+                "license": "MIT",
+                "framework": "pyside6",
+                "custom_scripts": {},
+                "docker": False,
+                "github_actions": False,
+                "vscode": False,
+                "enable_git_hooks": False,
+                "enable_agent_configs": False,
+            }
+
+            self.manager.generate(target_dir, "python-gui", context, log_callback=lambda msg: None)
+            pyproject_gui = (target_dir / "pyproject.toml").read_text(encoding="utf-8")
+
+            # Check [project.scripts] block has no empty lines and exactly one blank line before [dependency-groups]
+            expected_gui_block = (
+                "[project.scripts]\n"
+                'py-forts = "src.main:main"\n'
+                'main = "src.main:main"\n'
+                'test = "pytest:main"\n'
+                'build = "src.build:main"\n'
+                'format = "src.tools:format_code"\n'
+                'lint = "src.tools:lint_code"\n'
+                "\n"
+                "[dependency-groups]\n"
+                "dev = [\n"
+                '    "pytest>=8.0",\n'
+                '    "pyinstaller>=6.0",\n'
+                '    "ruff>=0.6",\n'
+                "]"
+            )
+            self.assertIn(expected_gui_block, pyproject_gui)
+            self.assertIn("]\n\n[project.scripts]\n", pyproject_gui)
+
+            # Check preview also matches exactly
+            preview_files = self.manager.preview("python-gui", context)
+            self.assertIn(expected_gui_block, preview_files["pyproject.toml"]["content"])
+
+            # Also check python-cli
+            preview_cli = self.manager.preview("python-cli", context)
+            expected_cli_block = (
+                "[project.scripts]\n"
+                'py-forts = "src.main:main"\n'
+                'main = "src.main:main"\n'
+                'test = "pytest:main"\n'
+                'build = "src.build:main"\n'
+                'format = "src.tools:format_code"\n'
+                'lint = "src.tools:lint_code"\n'
+                "\n"
+                "[dependency-groups]\n"
+                "dev = [\n"
+                '    "pytest>=8.0",\n'
+                '    "pyinstaller>=6.0",\n'
+                '    "ruff>=0.6",\n'
+                "]"
+            )
+            self.assertIn(expected_cli_block, preview_cli["pyproject.toml"]["content"])
+
+            # Also check python-fastapi
+            preview_fastapi = self.manager.preview("python-fastapi", context)
+            expected_fastapi_block = (
+                "[project.scripts]\n"
+                'py-forts = "src.main:run"\n'
+                'main = "src.main:run"\n'
+                'test = "pytest:main"\n'
+                'format = "src.tools:format_code"\n'
+                'lint = "src.tools:lint_code"\n'
+                "\n"
+                "[dependency-groups]\n"
+                "dev = [\n"
+                '    "pytest>=8.3.0",\n'
+                '    "httpx>=0.27.0",\n'
+                '    "ruff>=0.6.0",\n'
+                "]"
+            )
+            self.assertIn(expected_fastapi_block, preview_fastapi["pyproject.toml"]["content"])
+
 if __name__ == "__main__":
     unittest.main()
+
 
