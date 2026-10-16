@@ -2,6 +2,7 @@ import argparse
 import sys
 from pathlib import Path
 from py_project_init.core.generator import TemplateManager
+from py_project_init.core.gitlab import load_token
 
 
 def run_cli(args: list[str] | None = None) -> int:
@@ -36,6 +37,13 @@ def run_cli(args: list[str] | None = None) -> int:
     parser.add_argument("--list", action="store_true", help="Alle verfügbaren Projektvorlagen auflisten")
     parser.add_argument("--gui", action="store_true", help="Grafische Benutzeroberfläche (PySide6) starten")
     parser.add_argument("--retrofit-hooks", metavar="DIR", help="Git-Hooks in bestehendem Projektverzeichnis nachrüsten")
+    parser.add_argument("--default-branch", default="main", help="Name des Default-Branches (Standard: main)")
+    parser.add_argument("--gitlab-url", help="GitLab-Instanz, z. B. https://gitlab.data-al.de – aktiviert die GitLab-Anbindung. Token aus Windows-Tresor oder Umgebungsvariable GITLAB_TOKEN")
+    parser.add_argument("--gitlab-namespace", default="", help="Gruppe/Namespace, z. B. development (leer = persönlicher Namespace)")
+    parser.add_argument("--gitlab-visibility", default="private", choices=["private", "internal", "public"], help="Sichtbarkeit des neuen GitLab-Projekts")
+    parser.add_argument("--gitlab-work-branch", default="develop", help="Branch, auf den der initiale Commit gepusht wird (Standard: develop)")
+    parser.add_argument("--gitlab-no-mr", action="store_true", help="Keinen Merge Request in den Default-Branch anlegen")
+    parser.add_argument("--gitlab-ssh", action="store_true", help="SSH- statt HTTPS-URL als Remote verwenden")
     parser.add_argument("--retrofit-agents", metavar="DIR", help="Agenten-Konfiguration in bestehendem Projektverzeichnis nachrüsten")
 
     parsed = parser.parse_args(args)
@@ -109,7 +117,25 @@ def run_cli(args: list[str] | None = None) -> int:
         "enable_agent_configs": not parsed.no_agents,
         "selected_agent_rules": recommended.get("rules", []),
         "selected_agent_skills": recommended.get("skills", []),
+        "default_branch": parsed.default_branch,
+        "gitlab": {"enabled": False},
     }
+
+    if parsed.gitlab_url:
+        token = load_token(parsed.gitlab_url)
+        if not token:
+            print("Fehler: Kein GitLab-Token gefunden. Setze GITLAB_TOKEN oder speichere ihn einmal über die GUI.", file=sys.stderr)
+            return 1
+        context["gitlab"] = {
+            "enabled": True,
+            "url": parsed.gitlab_url,
+            "token": token,
+            "namespace": parsed.gitlab_namespace,
+            "visibility": parsed.gitlab_visibility,
+            "work_branch": parsed.gitlab_work_branch,
+            "create_mr": not parsed.gitlab_no_mr,
+            "use_ssh": parsed.gitlab_ssh,
+        }
 
     if parsed.preview:
         files_map = manager.preview(template_id, context)

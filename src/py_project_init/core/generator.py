@@ -1,9 +1,11 @@
+import os
 import re
 import shutil
 import subprocess
 from pathlib import Path
 import yaml
 from jinja2 import Environment, FileSystemLoader
+from py_project_init.core.gitlab import GitLabClient, GitLabError
 
 
 def _summarize_output(text: str, max_len: int = 240) -> str:
@@ -18,6 +20,9 @@ def _summarize_output(text: str, max_len: int = 240) -> str:
 
 
 class TemplateManager:
+    # Replaceable in tests (fake client without network access)
+    gitlab_client_factory = GitLabClient
+
     def __init__(
         self,
         templates_dir: Path,
@@ -171,7 +176,7 @@ class TemplateManager:
 
         # 2. Git Repository initialisieren
         check_cancel()
-        if not self._init_git_repo(target_dir, log_callback):
+        if not self._init_git_repo(target_dir, log_callback, initial_branch=context.get("default_branch")):
             problems.append("Git-Repository konnte nicht initialisiert werden (git init).")
 
         # 3. Git Hooks einrichten (falls ausgewählt)
@@ -269,10 +274,153 @@ class TemplateManager:
             elif res.stdout.strip():
                 log_callback(res.stdout.strip())
 
-        # 7. Initialer Commit mit --no-verify
-        check_cancel()
-        problems.extend(self._commit_initial(target_dir, log_callback, is_cancelled=is_cancelled))
+        # 7. Optional: GitLab-Projekt anlegen/verbinden (vor dem Commit, damit dieser auf dem
+        #    serverseitigen Default-Branch aufsetzt)
+        gitlab_cfg = context.get("gitlab") or {}
+        gitlab_state = None
+        if gitlab_cfg.get("enabled"):
+            check_cancel()
+            gitlab_state = self._prepare_gitlab_remote(target_dir, context, log_callback, problems)
 
+        # 8. Initialer Commit mit --no-verify
+        check_cancel()
+        commit_problems = self._commit_initial(target_dir, log_callback, is_cancelled=is_cancelled)
+        problems.extend(commit_problems)
+
+        # 9. Optional: zu GitLab pushen und Merge Request anlegen
+        if gitlab_state and not commit_problems:
+            check_cancel()
+            problems.extend(self._push_to_gitlab(target_dir, gitlab_state, log_callback))
+
+        return problems
+
+    # ── GitLab ──────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _git(target_dir: Path, *args: str) -> subprocess.CompletedProcess:
+        # GIT_TERMINAL_PROMPT=0: never hang on an invisible terminal prompt (GUI credential helpers still work)
+        env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+        return subprocess.run(["git", *args], cwd=target_dir, capture_output=True, text=True, env=env)
+
+    def _prepare_gitlab_remote(self, target_dir: Path, context: dict, log_callback, problems: list[str]) -> dict | None:
+        """Creates (or reuses an empty) GitLab project, adds 'origin' and bases the local branches on it.
+
+        Returns the state needed for pushing, or None if the GitLab step failed.
+        """
+        cfg = context["gitlab"]
+        name = context["project_name"]
+        default_branch = context.get("default_branch") or "main"
+        work_branch = (cfg.get("work_branch") or "").strip() or default_branch
+        namespace = (cfg.get("namespace") or "").strip().strip("/")
+
+        try:
+            client = self.gitlab_client_factory(cfg["url"], cfg["token"])
+            if not namespace:
+                namespace = client.current_user()["username"]
+            full_path = f"{namespace}/{name}"
+            project = client.get_project(full_path)
+            if project and not project.get("empty_repo"):
+                msg = (f"GitLab-Projekt '{full_path}' existiert bereits und enthält Commits – "
+                       "es wird nicht verändert. Bitte anderen Namen wählen oder manuell verbinden.")
+                log_callback(f"✖ {msg}")
+                problems.append(f"GitLab: {msg}")
+                return None
+            if project:
+                log_callback(f"GitLab: Verwende vorhandenes leeres Projekt {project.get('web_url', full_path)}")
+            else:
+                log_callback(f"GitLab: Lege Projekt '{full_path}' an...")
+                ns_id = client.get_namespace_id(namespace) if cfg.get("namespace") else None
+                project = client.create_project(
+                    name, ns_id, default_branch,
+                    visibility=cfg.get("visibility") or "private",
+                    description=context.get("description", ""),
+                )
+                log_callback(f"Erfolg: GitLab-Projekt angelegt: {project.get('web_url', full_path)}")
+        except GitLabError as e:
+            log_callback(f"✖ GitLab-Fehler: {e}")
+            problems.append(f"GitLab: {e}")
+            return None
+
+        remote_url = project.get("ssh_url_to_repo") if cfg.get("use_ssh") else project.get("http_url_to_repo")
+        res = self._git(target_dir, "remote", "add", "origin", remote_url)
+        if res.returncode != 0:
+            res = self._git(target_dir, "remote", "set-url", "origin", remote_url)
+        log_callback(f"Git-Remote 'origin' gesetzt: {remote_url}")
+
+        remote_default = project.get("default_branch")
+        based_on_remote = False
+        if remote_default and not project.get("empty_repo"):
+            default_branch = remote_default
+            res = self._git(target_dir, "fetch", "origin", default_branch)
+            if res.returncode != 0:
+                output = res.stderr.strip() or res.stdout.strip()
+                log_callback(f"✖ git fetch fehlgeschlagen: {output}")
+                problems.append(f"GitLab 'git fetch': {_summarize_output(output)}")
+                return None
+            # Local branches start at the server's initial README commit; the project commit goes on top.
+            base = f"refs/remotes/origin/{default_branch}"
+            self._git(target_dir, "update-ref", f"refs/heads/{default_branch}", base)
+            if work_branch != default_branch:
+                self._git(target_dir, "update-ref", f"refs/heads/{work_branch}", base)
+            self._git(target_dir, "symbolic-ref", "HEAD", f"refs/heads/{work_branch}")
+            self._git(target_dir, "branch", f"--set-upstream-to=origin/{default_branch}", default_branch)
+            based_on_remote = True
+            log_callback(f"Lokale Branches basieren auf origin/{default_branch}; Arbeits-Branch: {work_branch}")
+
+        return {
+            "client": client,
+            "project": project,
+            "default_branch": default_branch,
+            "work_branch": work_branch,
+            "based_on_remote": based_on_remote,
+            "create_mr": bool(cfg.get("create_mr", True)),
+            "project_name": name,
+        }
+
+    def _push_to_gitlab(self, target_dir: Path, state: dict, log_callback) -> list[str]:
+        """Pushes the initial commit and opens a merge request work_branch -> default_branch."""
+        problems: list[str] = []
+        default_branch, work_branch = state["default_branch"], state["work_branch"]
+
+        if state["based_on_remote"]:
+            branches = [work_branch]
+        else:
+            # Empty existing project: the first push has to create the default branch
+            # (only allowed for Maintainers/Owners).
+            current = self._git(target_dir, "symbolic-ref", "--short", "HEAD").stdout.strip() or default_branch
+            if current != default_branch:
+                self._git(target_dir, "branch", "-m", current, default_branch)
+            branches = [default_branch]
+            if work_branch != default_branch:
+                self._git(target_dir, "branch", work_branch)
+                self._git(target_dir, "symbolic-ref", "HEAD", f"refs/heads/{work_branch}")
+                branches.append(work_branch)
+
+        for branch in branches:
+            log_callback(f"Pushe '{branch}' nach GitLab...")
+            # --no-verify: the local pre-push hook would block the default branch and run tests
+            res = self._git(target_dir, "push", "--no-verify", "-u", "origin", branch)
+            if res.returncode != 0:
+                output = res.stderr.strip() or res.stdout.strip()
+                log_callback(f"✖ Push von '{branch}' fehlgeschlagen: {output}")
+                hint = ""
+                if "default branch" in output.lower() or "protected branch" in output.lower():
+                    hint = " – Ein Owner/Maintainer muss den Default-Branch anlegen bzw. freigeben."
+                problems.append(f"GitLab-Push '{branch}': {_summarize_output(output)}{hint}")
+                return problems
+            log_callback(f"Erfolg: git push -u origin {branch}")
+
+        # A MR only makes sense if the work branch carries the project commit on top of the server's default branch
+        if state["create_mr"] and state["based_on_remote"] and work_branch != default_branch:
+            try:
+                mr = state["client"].create_merge_request(
+                    state["project"]["id"], work_branch, default_branch,
+                    f"Initiales Projekt-Setup: {state['project_name']}",
+                )
+                log_callback(f"Merge Request angelegt: {mr.get('web_url', '')}")
+            except GitLabError as e:
+                log_callback(f"✖ Merge Request konnte nicht angelegt werden: {e}")
+                problems.append(f"GitLab Merge Request: {e}")
         return problems
 
     def _should_include(self, rel_path: Path, filename: str, conditions: list[dict], context: dict) -> bool:
@@ -300,15 +448,16 @@ class TemplateManager:
                 existing_set.add(stripped)
         return "\n".join(merged) + "\n"
 
-    def _init_git_repo(self, target_dir: Path, log_callback) -> bool:
+    def _init_git_repo(self, target_dir: Path, log_callback, initial_branch: str | None = None) -> bool:
         """Initializes git repository if not already present. Returns False if git init failed."""
         if not (target_dir / ".git").exists():
             log_callback("Initialisiere Git Repository...")
-            res = subprocess.run(["git", "init"], cwd=target_dir, capture_output=True, text=True)
+            cmd = ["git", "init"] + (["-b", initial_branch] if initial_branch else [])
+            res = subprocess.run(cmd, cwd=target_dir, capture_output=True, text=True)
             if res.returncode != 0:
                 log_callback(f"✖ Git-Fehler: {res.stderr.strip() or res.stdout.strip()}")
                 return False
-            log_callback("Erfolg: git init")
+            log_callback(f"Erfolg: {' '.join(cmd)}")
         return True
 
     def _install_git_hooks(

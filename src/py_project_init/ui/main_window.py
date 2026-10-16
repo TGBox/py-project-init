@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QSplitter, QFrame
 )
 from py_project_init.core.generator import TemplateManager
+from py_project_init.core.gitlab import GitLabClient, GitLabError, load_token, save_token, delete_token
 from py_project_init.ui.styles import DARK_THEME
 from py_project_init.ui.dialogs import PreviewDialog, RetrofitDialog, CreateTemplateDialog
 
@@ -346,6 +347,76 @@ class MainWindow(QMainWindow):
         tab2_layout.setContentsMargins(14, 14, 14, 14)
         tab2_layout.setSpacing(14)
 
+        # GitLab Box
+        self.gitlab_box = QGroupBox("GitLab-Anbindung (optional)")
+        gl_layout = QVBoxLayout(self.gitlab_box)
+        self.gitlab_enable_cb = QCheckBox("Projekt auf GitLab anlegen und initialen Commit pushen")
+        self.gitlab_enable_cb.setStyleSheet("font-weight: 600; color: #7aa2f7;")
+        self.gitlab_enable_cb.setToolTip(
+            "Legt das Projekt per API inkl. README an, damit GitLab den Default-Branch selbst erstellt.\n"
+            "Der initiale Commit wird darauf aufgesetzt, auf den Arbeits-Branch gepusht und per Merge Request\n"
+            "in den Default-Branch eingebracht – funktioniert auch mit Developer-Rechten."
+        )
+        gl_layout.addWidget(self.gitlab_enable_cb)
+
+        self.gitlab_container = QWidget()
+        gl_form = QVBoxLayout(self.gitlab_container)
+        gl_form.setContentsMargins(12, 4, 4, 4)
+
+        def _row(label: str, widget: QWidget) -> QHBoxLayout:
+            row = QHBoxLayout()
+            lbl = QLabel(label)
+            lbl.setMinimumWidth(130)
+            row.addWidget(lbl)
+            row.addWidget(widget, 1)
+            gl_form.addLayout(row)
+            return row
+
+        self.gitlab_url_input = QLineEdit()
+        self.gitlab_url_input.setPlaceholderText("https://gitlab.data-al.de")
+        _row("GitLab-URL:", self.gitlab_url_input)
+
+        self.gitlab_namespace_input = QLineEdit()
+        self.gitlab_namespace_input.setPlaceholderText("z. B. development (leer = persönlicher Namespace)")
+        _row("Gruppe/Namespace:", self.gitlab_namespace_input)
+
+        self.gitlab_token_input = QLineEdit()
+        self.gitlab_token_input.setEchoMode(QLineEdit.Password)
+        self.gitlab_token_input.setPlaceholderText("Personal Access Token mit Scope 'api'")
+        token_row = _row("Access Token:", self.gitlab_token_input)
+        self.gitlab_test_btn = QPushButton("Verbindung testen")
+        self.gitlab_test_btn.setObjectName("toolButton")
+        self.gitlab_test_btn.clicked.connect(self._test_gitlab_connection)
+        token_row.addWidget(self.gitlab_test_btn)
+
+        self.gitlab_save_token_cb = QCheckBox("Token sicher im Windows-Anmeldeinformationsspeicher merken")
+        self.gitlab_save_token_cb.setChecked(True)
+        gl_form.addWidget(self.gitlab_save_token_cb)
+
+        self.gitlab_visibility_combo = QComboBox()
+        for label, value in [("Privat", "private"), ("Intern", "internal"), ("Öffentlich", "public")]:
+            self.gitlab_visibility_combo.addItem(label, value)
+        _row("Sichtbarkeit:", self.gitlab_visibility_combo)
+
+        self.default_branch_input = QLineEdit("main")
+        self.default_branch_input.setToolTip("Default-Branch des Projekts (wird auch ohne GitLab für 'git init -b' verwendet).")
+        _row("Default-Branch:", self.default_branch_input)
+
+        self.gitlab_work_branch_input = QLineEdit("develop")
+        self.gitlab_work_branch_input.setToolTip("Auf diesen Branch wird der initiale Commit gepusht (der Default-Branch ist geschützt).")
+        _row("Arbeits-Branch:", self.gitlab_work_branch_input)
+
+        self.gitlab_mr_cb = QCheckBox("Merge Request Arbeits-Branch → Default-Branch automatisch anlegen")
+        self.gitlab_mr_cb.setChecked(True)
+        gl_form.addWidget(self.gitlab_mr_cb)
+
+        gl_layout.addWidget(self.gitlab_container)
+        self.gitlab_container.setEnabled(False)
+        self.gitlab_enable_cb.toggled.connect(self.gitlab_container.setEnabled)
+        self.gitlab_enable_cb.toggled.connect(lambda _: self._update_summary())
+        self.gitlab_url_input.editingFinished.connect(self._load_gitlab_token)
+        tab2_layout.addWidget(self.gitlab_box)
+
         # Git-Hooks Box
         self.git_hooks_box = QGroupBox("Git-Hooks Integration (.git/hooks/)")
         hooks_box_layout = QVBoxLayout(self.git_hooks_box)
@@ -415,7 +486,7 @@ class MainWindow(QMainWindow):
         tab2_layout.addWidget(self.agent_box)
         tab2_layout.addStretch()
 
-        self.tabs.addTab(tab2_scroll, "🛡️ Git-Hooks & Agenten")
+        self.tabs.addTab(tab2_scroll, "🛡️ GitLab, Git-Hooks & Agenten")
 
         # ── TAB 3: ⚙️ Metadaten & Skripte ──
         tab3_scroll = QScrollArea()
@@ -682,6 +753,9 @@ class MainWindow(QMainWindow):
             features.append(f"🤖 {rules_count} Regeln / {skills_count} Skills")
         else:
             features.append("🤖 Agents inaktiv")
+
+        if hasattr(self, "gitlab_enable_cb") and self.gitlab_enable_cb.isChecked():
+            features.append("🦊 GitLab")
 
         self.summary_features_label.setText(" • ".join(features))
 
@@ -1168,6 +1242,18 @@ class MainWindow(QMainWindow):
         if idx >= 0:
             self.license_combo.setCurrentIndex(idx)
 
+        # Restore GitLab settings (token comes from the OS credential store, never from QSettings)
+        self.gitlab_enable_cb.setChecked(self.settings.value("gitlab_enabled", False, type=bool))
+        self.gitlab_url_input.setText(self.settings.value("gitlab_url", ""))
+        self.gitlab_namespace_input.setText(self.settings.value("gitlab_namespace", ""))
+        idx = self.gitlab_visibility_combo.findData(self.settings.value("gitlab_visibility", "private"))
+        if idx >= 0:
+            self.gitlab_visibility_combo.setCurrentIndex(idx)
+        self.default_branch_input.setText(self.settings.value("default_branch", "main"))
+        self.gitlab_work_branch_input.setText(self.settings.value("gitlab_work_branch", "develop"))
+        self.gitlab_mr_cb.setChecked(self.settings.value("gitlab_create_mr", True, type=bool))
+        self._load_gitlab_token()
+
         # Restore scripts
         self._load_scripts_settings()
 
@@ -1185,6 +1271,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("author_name", self.author_input.text().strip())
         self.settings.setValue("author_email", self.email_input.text().strip())
         self.settings.setValue("license", self.license_combo.currentText())
+        self._save_gitlab_settings()
         self._save_scripts_settings()
         current_tpl = self.template_combo.currentData()
         if current_tpl:
@@ -1232,6 +1319,16 @@ class MainWindow(QMainWindow):
             "selected_agent_skills": [
                 s_id for s_id, cb in self.agent_skill_checkboxes.items() if cb.isChecked()
             ],
+            "default_branch": self.default_branch_input.text().strip() or "main",
+            "gitlab": {
+                "enabled": self.gitlab_enable_cb.isChecked(),
+                "url": self.gitlab_url_input.text().strip(),
+                "token": self.gitlab_token_input.text().strip(),
+                "namespace": self.gitlab_namespace_input.text().strip(),
+                "visibility": self.gitlab_visibility_combo.currentData(),
+                "work_branch": self.gitlab_work_branch_input.text().strip(),
+                "create_mr": self.gitlab_mr_cb.isChecked(),
+            },
         }
 
         for opt_id, cb in self.option_checkboxes.items():
@@ -1339,6 +1436,17 @@ class MainWindow(QMainWindow):
 
         context = self._collect_context()
 
+        gitlab_cfg = context["gitlab"]
+        if gitlab_cfg["enabled"]:
+            if not gitlab_cfg["url"] or not gitlab_cfg["token"]:
+                QMessageBox.warning(
+                    self, "GitLab-Angaben fehlen",
+                    "Für die GitLab-Anbindung werden URL und Access Token benötigt\n"
+                    "(Tab „GitLab, Git-Hooks & Agenten“)."
+                )
+                return
+            self._save_gitlab_settings()
+
         # Check for PyQt6 license warning
         if not self._check_pyqt6_warning(context):
             return
@@ -1415,6 +1523,52 @@ class MainWindow(QMainWindow):
             self.log_view.append("\n✖ Initialisierung fehlgeschlagen. Siehe Log oben.")
             self.statusBar().showMessage("Fehler bei der Initialisierung.", 5000)
             self.launcher_widget.setVisible(False)
+
+    # ── GitLab ──────────────────────────────────────────────────────────────
+
+    def _load_gitlab_token(self):
+        url = self.gitlab_url_input.text().strip()
+        if url and not self.gitlab_token_input.text().strip():
+            self.gitlab_token_input.setText(load_token(url))
+
+    def _save_gitlab_settings(self):
+        self.settings.setValue("gitlab_enabled", self.gitlab_enable_cb.isChecked())
+        self.settings.setValue("gitlab_url", self.gitlab_url_input.text().strip())
+        self.settings.setValue("gitlab_namespace", self.gitlab_namespace_input.text().strip())
+        self.settings.setValue("gitlab_visibility", self.gitlab_visibility_combo.currentData())
+        self.settings.setValue("default_branch", self.default_branch_input.text().strip() or "main")
+        self.settings.setValue("gitlab_work_branch", self.gitlab_work_branch_input.text().strip())
+        self.settings.setValue("gitlab_create_mr", self.gitlab_mr_cb.isChecked())
+        url = self.gitlab_url_input.text().strip()
+        token = self.gitlab_token_input.text().strip()
+        if url and token and self.gitlab_save_token_cb.isChecked():
+            if not save_token(url, token):
+                self.statusBar().showMessage("Hinweis: Token konnte nicht im Anmeldeinformationsspeicher abgelegt werden.", 5000)
+        elif url and not self.gitlab_save_token_cb.isChecked():
+            delete_token(url)
+
+    def _test_gitlab_connection(self):
+        url = self.gitlab_url_input.text().strip()
+        token = self.gitlab_token_input.text().strip()
+        if not url or not token:
+            QMessageBox.warning(self, "GitLab", "Bitte GitLab-URL und Access Token eintragen.")
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            client = GitLabClient(url, token, timeout=10)
+            user = client.current_user()
+            msg = f"✔ Angemeldet als {user.get('name')} (@{user.get('username')})."
+            namespace = self.gitlab_namespace_input.text().strip()
+            if namespace:
+                client.get_namespace_id(namespace)
+                msg += f"\n✔ Gruppe '{namespace}' gefunden."
+        except GitLabError as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self, "GitLab-Verbindung fehlgeschlagen", str(e))
+            return
+        QApplication.restoreOverrideCursor()
+        self._save_gitlab_settings()
+        QMessageBox.information(self, "GitLab-Verbindung", msg)
 
     # ── Dateimanager & Launcher ─────────────────────────────────────────────
 

@@ -23,6 +23,12 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
 - **Vorlagen-Ersteller (Template Creator):**
   - Erstellt aus einem bestehenden Projektordner automatisch eine neue, wiederverwendbare Jinja2-Vorlage mit generierter `template.yaml`.
   - Über das Menü **Vorlagen → Neue Vorlage aus bestehendem Projekt erstellen...**.
+- **GitLab-Anbindung (optional, auch für selbstgehostete Instanzen):**
+  - Legt das Projekt per API auf GitLab an – **inklusive README**, damit GitLab den Default-Branch (`main`) selbst erzeugt. So scheitert der erste Push nicht mehr an „A default branch does not yet exist“, auch nicht mit Developer-Rechten.
+  - Der initiale Commit wird lokal auf `origin/main` aufgesetzt, auf den Arbeits-Branch (Standard: `develop`) gepusht und per Merge Request in `main` eingebracht.
+  - Ist das Projekt auf GitLab schon vorhanden und leer, werden Default- und Arbeits-Branch direkt gepusht (dafür sind Maintainer-Rechte nötig). Projekte, die schon Commits enthalten, werden nicht angefasst.
+  - Das Access Token (Scope `api`) liegt im Windows-Anmeldeinformationsspeicher (`keyring`), nie in den Einstellungen. Alternativ wird `GITLAB_TOKEN` gelesen.
+  - Neue Repositories werden mit `git init -b <Default-Branch>` (Standard: `main`) angelegt.
 - **Headless CLI-Modus:**
   - Vollständige Steuerung über die Kommandozeile für Scripting und CI/CD ohne GUI-Zwang.
 - **System-Tool-Prüfung:** Live-Erkennung verfügbarer CLI-Werkzeuge (`git`, `uv`, `cargo`, `npm`) im System-PATH.
@@ -114,6 +120,9 @@ uv run py-project-init mein-projekt -t python-cli --preview
 
 # Projekt direkt via CLI initialisieren
 uv run py-project-init mein-service -t python-fastapi -p /pfad/zu/projekten
+
+# Projekt direkt auf GitLab anlegen (Token aus Windows-Tresor oder $env:GITLAB_TOKEN)
+uv run py-project-init cloud-net -t python-fastapi --gitlab-url https://gitlab.data-al.de --gitlab-namespace development
 
 # Projekt mit Autor und Lizenz initialisieren
 uv run py-project-init my-tool -t rust-cli --author "Max Mustermann" --email "max@example.com" --license MIT

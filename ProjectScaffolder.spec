@@ -10,7 +10,7 @@ a = Analysis(
         ('assets', 'assets'),
         ('hooks', 'hooks'),
     ],
-    hiddenimports=[],
+    hiddenimports=['keyring.backends.Windows'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
