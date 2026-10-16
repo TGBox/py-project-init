@@ -177,6 +177,30 @@ class TestGitHooks(unittest.TestCase):
         )
         self.assertEqual(res_feat.returncode, 0, f"pre-push failed: {res_feat.stderr}")
 
+    def test_pre_push_node_test_gate(self):
+        """Tests that pre-push executes the Node/TypeScript test suite before pushing."""
+        hook_path = self.hooks_dir / "pre-push"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            pkg = proj / "package.json"
+            pkg.write_text('{\n  "scripts": {\n    "test": "node -e \\"console.log(\'running-vitest-test\')\\""\n  }\n}\n', encoding="utf-8")
+
+            env = os.environ.copy()
+            env.pop("GIT_PRE_PUSH_SKIP_TESTS", None)
+
+            input_feat = "refs/heads/feature/abc 123456 refs/heads/feature/abc 000000\n"
+            res = subprocess.run(
+                [self.bash, str(hook_path), "origin", "git@github.com:repo.git"],
+                cwd=proj,
+                input=input_feat,
+                env=env,
+                capture_output=True,
+                text=True
+            )
+            self.assertEqual(res.returncode, 0, f"pre-push test gate failed: {res.stderr}")
+            self.assertIn("npm test vor dem Push aus", res.stdout)
+            self.assertNotIn("pytest", res.stdout)
+
     def test_commit_lifecycle_no_premature_bump(self):
         """Verifies that an invalid commit message does not prematurely bump the version in pyproject.toml."""
         import shutil

@@ -118,6 +118,53 @@ class TestTemplateManager(unittest.TestCase):
             self.assertIn('lint = "ruff check ."', pyproject_content)
             self.assertIn('format = "ruff format ."', pyproject_content)
 
+    def test_generate_node_ts_project(self):
+        """Verifies that a TypeScript project generates correct package.json scripts and test files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "ts_app"
+            context = {
+                "project_name": "ts-app",
+                "project_slug": "ts_app",
+                "description": "TypeScript test application",
+                "author": "TS Tester",
+                "author_email": "ts@example.com",
+                "license": "MIT",
+                "custom_scripts": {
+                    "main": "node dist/index.js",
+                    "test": "vitest run",
+                    "build": "tsc",
+                    "format": "prettier --write .",
+                    "lint": "eslint .",
+                },
+                "docker": False,
+                "github_actions": True,
+                "vscode": True,
+                "enable_git_hooks": True,
+                "selected_git_hooks": ["pre-push", "post-commit"],
+                "enable_agent_configs": True,
+                "selected_agent_rules": ["general_guidelines", "typescript_standards"],
+                "selected_agent_skills": ["code-review", "test-runner"],
+            }
+
+            self.manager.generate(
+                target_dir=target_dir,
+                template_id="node-ts",
+                context=context,
+                log_callback=lambda msg: None
+            )
+
+            # Check files created
+            self.assertTrue((target_dir / "package.json").exists())
+            self.assertTrue((target_dir / "tsconfig.json").exists())
+            self.assertTrue((target_dir / "src" / "index.ts").exists())
+            self.assertTrue((target_dir / "tests" / "index.test.ts").exists())
+            self.assertTrue((target_dir / ".git" / "hooks" / "pre-push").exists())
+
+            # Check package.json scripts contain vitest and no pytest
+            pkg_content = (target_dir / "package.json").read_text(encoding="utf-8")
+            self.assertIn('"test": "vitest run"', pkg_content)
+            self.assertNotIn("pytest", pkg_content)
+
     def test_hyphen_project_naming_and_flat_structure(self):
         """Verifies projects with hyphens retain exact name in commands and use flat src structure."""
         with tempfile.TemporaryDirectory() as temp_dir:

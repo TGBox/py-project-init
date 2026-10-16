@@ -62,6 +62,20 @@ class TestMainWindow(unittest.TestCase):
         self.window._clear_all_scripts()
         self.assertEqual(len(self.window._get_custom_scripts_dict()), 0)
 
+        # Verify template switching updates scripts table to appropriate defaults
+        idx_py = self.window.template_combo.findData("python-cli")
+        if idx_py >= 0:
+            self.window.template_combo.setCurrentIndex(idx_py)
+            py_scripts = self.window._get_custom_scripts_dict()
+            self.assertEqual(py_scripts.get("test"), "pytest:main")
+
+        idx_node = self.window.template_combo.findData("node-ts")
+        if idx_node >= 0:
+            self.window.template_combo.setCurrentIndex(idx_node)
+            node_scripts = self.window._get_custom_scripts_dict()
+            self.assertEqual(node_scripts.get("test"), "vitest run")
+            self.assertEqual(node_scripts.get("build"), "tsc")
+
     def test_preview_dialog(self):
         """Tests that PreviewDialog loads files and displays content on selection and clicks."""
         # 1. Test dict format as produced by generator.preview()

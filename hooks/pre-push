@@ -35,11 +35,17 @@ elif [ -f "Cargo.toml" ] && command -v cargo >/dev/null 2>&1; then
         echo "FEHLER: cargo test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
         exit 1
     }
-elif [ -f "package.json" ] && command -v npm >/dev/null 2>&1; then
-    if npm run | grep -q "test"; then
+elif [ -f "package.json" ]; then
+    if command -v npm >/dev/null 2>&1 && npm run 2>/dev/null | grep -q "test"; then
         echo "Führe npm test vor dem Push aus..."
         npm test || {
             echo "FEHLER: npm test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+            exit 1
+        }
+    elif command -v npx >/dev/null 2>&1 && [ -f "node_modules/.bin/vitest" ]; then
+        echo "Führe vitest vor dem Push aus..."
+        npx vitest run || {
+            echo "FEHLER: vitest vor dem Push fehlgeschlagen. Push abgebrochen." >&2
             exit 1
         }
     fi

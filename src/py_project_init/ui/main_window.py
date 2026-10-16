@@ -86,6 +86,7 @@ class MainWindow(QMainWindow):
         self.agent_rule_checkboxes: dict[str, QCheckBox] = {}
         self.agent_skill_checkboxes: dict[str, QCheckBox] = {}
         self._last_target_dir: str = ""
+        self._current_template_id: str = ""
         self.worker: GenerateWorker | None = None
 
         self._init_menu()
@@ -892,9 +893,10 @@ class MainWindow(QMainWindow):
         self._save_scripts_settings()
         self.statusBar().showMessage(f"Skript '{name}' hinzugefügt.", 2500)
 
-    def _apply_recommended_scripts(self):
-        """Overwrites or fills the script table with recommended scripts for current template."""
-        recommended = self._get_recommended_scripts()
+    def _apply_recommended_scripts(self, template_id: str | None = None):
+        """Overwrites the script table with recommended scripts for current template."""
+        self.scripts_table.setRowCount(0)
+        recommended = self._get_recommended_scripts(template_id)
         for name, cmd in recommended.items():
             self._add_or_update_script(name, cmd)
         self.statusBar().showMessage("Standard-Skriptvorschläge übernommen.", 2500)
@@ -930,14 +932,30 @@ class MainWindow(QMainWindow):
                 scripts[name_item.text()] = cmd_item.text()
         return scripts
 
-    def _save_scripts_settings(self):
+    def _save_scripts_settings(self, template_id: str | None = None):
+        if not template_id:
+            template_id = getattr(self, "_current_template_id", "") or (
+                self.template_combo.currentData() if hasattr(self, "template_combo") else ""
+            )
         scripts = self._get_custom_scripts_dict()
+        if template_id:
+            self.settings.setValue(f"custom_scripts_{template_id}", json.dumps(scripts))
         self.settings.setValue("custom_scripts", json.dumps(scripts))
 
-    def _load_scripts_settings(self):
-        raw = self.settings.value("custom_scripts", "{}")
+    def _load_scripts_settings(self, template_id: str | None = None):
+        if not template_id and hasattr(self, "template_combo"):
+            template_id = self.template_combo.currentData() or ""
+
+        raw = self.settings.value(f"custom_scripts_{template_id}", None) if template_id else None
+        if not raw:
+            self._apply_recommended_scripts(template_id)
+            return
+
         try:
             scripts = json.loads(raw) if isinstance(raw, str) else {}
+            if not scripts:
+                self._apply_recommended_scripts(template_id)
+                return
             self.scripts_table.setRowCount(0)
             for name, cmd in scripts.items():
                 row = self.scripts_table.rowCount()
@@ -945,10 +963,7 @@ class MainWindow(QMainWindow):
                 self.scripts_table.setItem(row, 0, QTableWidgetItem(str(name)))
                 self.scripts_table.setItem(row, 1, QTableWidgetItem(str(cmd)))
         except Exception:
-            pass
-
-        if self.scripts_table.rowCount() == 0:
-            self._apply_recommended_scripts()
+            self._apply_recommended_scripts(template_id)
 
     # ── Template Management ─────────────────────────────────────────────────
 
@@ -1048,6 +1063,12 @@ class MainWindow(QMainWindow):
             self.template_desc_label.setText("")
             return
 
+        # Save previous template's scripts if template switched
+        prev_tpl = getattr(self, "_current_template_id", "")
+        if prev_tpl and prev_tpl != template_id:
+            self._save_scripts_settings(prev_tpl)
+        self._current_template_id = template_id
+
         # Save selected template
         self.settings.setValue("last_template", template_id)
 
@@ -1112,6 +1133,7 @@ class MainWindow(QMainWindow):
         # Update recommended agent configs for the new template
         self._refresh_agent_configs()
         self._refresh_script_preset_buttons()
+        self._load_scripts_settings(template_id)
 
     # ── Einstellungen Persistenz ────────────────────────────────────────────
 
