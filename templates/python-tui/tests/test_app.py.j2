@@ -1,8 +1,9 @@
 import unittest
+from textual.widgets import Label
 from src.app import {{ project_name | replace("-", " ") | replace("_", " ") | title | replace(" ", "") }}App
 
 
-class TestTuiApp(unittest.IsolatedAsyncioTestCase):
+class TestAppLifecycle(unittest.IsolatedAsyncioTestCase):
     async def test_app_lifecycle(self) -> None:
         """Verifies the Textual app mounts, toggles theme and handles button clicks."""
         app = {{ project_name | replace("-", " ") | replace("_", " ") | title | replace(" ", "") }}App()
@@ -10,5 +11,5 @@ class TestTuiApp(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(app.is_running)
             await pilot.press("d")
             await pilot.click("#btn_dash")
-            status = app.query_one("#status_label")
-            self.assertIn("Dashboard", str(status.renderable))
+            status = app.query_one("#status_label", Label)
+            self.assertIn("Dashboard", str(status.render()))

@@ -2,7 +2,8 @@
 
 ## SemVer v3.0.1
 
-- 2026-10-17 (5c58b5a): fix: fix incorrect formatting in web frontend template
+- 2026-10-17 (a666867): fix!: fix templates generating code that does not pass the provided linter and typecheck tests after initializing
+- 2026-10-17 (233e93f): fix: fix incorrect formatting in web frontend template
 - 2026-10-17 (7bcdc08): feat: add new templates for multiple different program types, update and specify the agent rules templates to match the new formats, update the script commands for the different types and languages
 - 2026-10-17 (f7b54c0): feat: add new planning documents
 - 2026-10-16 (ebb38e7): fix: fix project.scripts block in python project config having too many empty lines

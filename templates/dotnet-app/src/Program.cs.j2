@@ -28,9 +28,52 @@ app.MapGet("/", () => "Willkommen bei {{ project_name }}!");
 app.Run();
 {% elif app_type == 'avalonia' %}
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Themes.Fluent;
 using System;
 
 namespace {{ project_name | replace("-", " ") | replace("_", " ") | title | replace(" ", "") }};
+
+public class App : Application
+{
+    public override void Initialize()
+    {
+        Styles.Add(new FluentTheme());
+    }
+
+    public override void OnFrameworkInitializationCompleted()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            var window = new Window
+            {
+                Title = "{{ project_name }}",
+                Width = 800,
+                Height = 600,
+                Content = new TextBlock
+                {
+                    Text = "Willkommen bei {{ project_name }}! (F11: Vollbild)",
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+                }
+            };
+
+            window.KeyDown += (sender, e) =>
+            {
+                if (e.Key == Avalonia.Input.Key.F11)
+                {
+                    window.WindowState = window.WindowState == WindowState.FullScreen
+                        ? WindowState.Normal
+                        : WindowState.FullScreen;
+                }
+            };
+
+            desktop.MainWindow = window;
+        }
+        base.OnFrameworkInitializationCompleted();
+    }
+}
 
 class Program
 {

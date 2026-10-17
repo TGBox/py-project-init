@@ -1,0 +1,13 @@
+/// <reference types="vite/client" />
+{% if framework == 'vue' %}
+declare module '*.vue' {
+  import type { DefineComponent } from 'vue';
+  const component: DefineComponent<{}, {}, any>;
+  export default component;
+}
+{% elif framework == 'svelte' %}
+declare module '*.svelte' {
+  const component: any;
+  export default component;
+}
+{% endif %}

@@ -8,6 +8,8 @@ from textual.widgets import Button, Footer, Header, Label, Static
 class {{ project_name | replace("-", " ") | replace("_", " ") | title | replace(" ", "") }}App(App):
     """A modern Textual application."""
 
+    __test__ = False
+
     CSS = """
     Screen {
         background: $surface;
@@ -26,7 +28,6 @@ class {{ project_name | replace("-", " ") | replace("_", " ") | title | replace(
     }
 
     .welcome-title {
-        font-size: 18;
         text-style: bold;
         color: $primary;
         margin-bottom: 1;
