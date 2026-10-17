@@ -2,7 +2,8 @@
 
 ## SemVer v3.0.1
 
-- 2026-10-16 (99c7663): fix: fix project.scripts block in python project config having too many empty lines
+- 2026-10-17 (c6b1c15): feat: add new planning documents
+- 2026-10-16 (ebb38e7): fix: fix project.scripts block in python project config having too many empty lines
 - 2026-10-16 (fcd063e): fix: remove problematic additional check against missing key authority in our gitlab certificate authority
 - 2026-10-16 (8f0e920): fix: update uv.lock file
 - 2026-10-16 (e605be6): feat!: add new feature to create gitlab repositories directly and prevent empty ones
