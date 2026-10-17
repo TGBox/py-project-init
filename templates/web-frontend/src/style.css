@@ -56,6 +56,10 @@ p.subtitle {
   margin-bottom: 1.5rem;
 }
 
+.counter-box p {
+  margin-bottom: 1rem;
+}
+
 button {
   background-color: var(--primary);
   color: #0f172a;

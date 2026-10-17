@@ -2,6 +2,7 @@ import unittest
 import tempfile
 import shutil
 import subprocess
+from unittest.mock import patch
 from pathlib import Path
 from py_project_init.core.generator import TemplateManager
 
@@ -655,6 +656,63 @@ class TestTemplateManager(unittest.TestCase):
                 "]"
             )
             self.assertIn(expected_fastapi_block, preview_fastapi["pyproject.toml"]["content"])
+
+    @patch("subprocess.run")
+    def test_render_all_templates_and_framework_variants(self, mock_subp):
+        """Verifies that all templates and framework variants render completely without Jinja2 errors."""
+        mock_subp.return_value.returncode = 0
+        mock_subp.return_value.stdout = ""
+        mock_subp.return_value.stderr = ""
+
+        variants = [
+            ("web-frontend", {"framework": "react"}),
+            ("web-frontend", {"framework": "vue"}),
+            ("web-frontend", {"framework": "svelte"}),
+            ("web-fullstack", {}),
+            ("python-game", {"framework": "pygame-ce"}),
+            ("python-game", {"framework": "arcade"}),
+            ("python-tui", {}),
+            ("go-app", {"app_type": "cli"}),
+            ("go-app", {"app_type": "service"}),
+            ("dotnet-app", {"app_type": "webapi", "dotnet_version": "net8.0"}),
+            ("dotnet-app", {"app_type": "console", "dotnet_version": "net9.0"}),
+            ("dotnet-app", {"app_type": "avalonia", "dotnet_version": "net8.0"}),
+            ("python-cli", {}),
+            ("python-fastapi", {}),
+            ("python-gui", {"framework": "pyside6"}),
+            ("rust-cli", {}),
+            ("rust-gui", {"framework": "egui"}),
+            ("node-ts", {}),
+        ]
+
+        for t_id, extra_ctx in variants:
+            with tempfile.TemporaryDirectory() as td:
+                target = Path(td) / "test_proj"
+                ctx = {
+                    "project_name": "test-proj",
+                    "project_slug": "test_proj",
+                    "description": "A test project",
+                    "author": "Tester",
+                    "author_email": "tester@example.com",
+                    "license": "MIT",
+                    "custom_scripts": {},
+                    "github_actions": True,
+                    "docker": True,
+                    "vscode": True,
+                    "enable_git_hooks": True,
+                    "enable_git_tags": True,
+                    "selected_git_hooks": ["pre-commit", "commit-msg"],
+                    "enable_agent_configs": True,
+                    "selected_agent_rules": ["general_guidelines"],
+                    "selected_agent_skills": ["code-review"],
+                    "default_branch": "main",
+                    "gitlab": {"enabled": False},
+                }
+                ctx.update(extra_ctx)
+                self.manager.generate(target, t_id, ctx)
+                rendered_files = [str(p.relative_to(target)) for p in target.rglob("*") if p.is_file()]
+                self.assertGreater(len(rendered_files), 0, f"Template {t_id} ({extra_ctx}) produced no files")
+
 
 if __name__ == "__main__":
     unittest.main()
