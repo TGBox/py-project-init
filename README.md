@@ -31,7 +31,7 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
   - Neue Repositories werden mit `git init -b <Default-Branch>` (Standard: `main`) angelegt.
 - **Headless CLI-Modus:**
   - Vollständige Steuerung über die Kommandozeile für Scripting und CI/CD ohne GUI-Zwang.
-- **System-Tool-Prüfung:** Live-Erkennung verfügbarer CLI-Werkzeuge (`git`, `uv`, `cargo`, `npm`) im System-PATH.
+- **System-Tool-Prüfung:** Live-Erkennung verfügbarer CLI-Werkzeuge (`git`, `uv`, `cargo`, `npm`, `go`, `dotnet`) im System-PATH.
 - **Echtzeit-Validierung:** Sofortige Prüfung des Projektnamens auf Konventionen (nur Buchstaben, Ziffern, `-` und `_`, muss mit einem Buchstaben beginnen).
 - **Optimierte Pipeline (`uv init` → `uv venv` → `git init`):**
   - Deklarative `pre_init`-Hooks in `template.yaml` (z. B. automatisches `uv init` und `uv venv`).
@@ -68,8 +68,14 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
 | **Python CLI** | Python (uv / pyproject.toml) | `uv init` + `uv venv` Pipeline, modulares Paket, Tests mit pytest, Ruff, optionale GitHub Actions CI & Dockerfile |
 | **Python FastAPI** | Python (FastAPI, uv) | `uv init` + `uv venv` Pipeline, REST API mit Pydantic, Healthchecks, optionale GitHub Actions CI & Dockerfile |
 | **Python GUI** | Python (Desktop GUI) | `uv init` + `uv venv` Pipeline, GUI-Framework (**PySide6**, **PyQt6**, **Tkinter**, **wxPython**, **Kivy**) mit vergleichender Entscheidungshilfe |
+| **Python Game** | Python (Pygame-ce / Arcade) | `uv init` + `uv venv` Pipeline, Game-Engine (**Pygame-ce** oder **Arcade**), strukturierte Asset-Ordner (`assets/audio`, `assets/sprites`), Fenster- & Vollbildmodus (`F11`), optionale GitHub Actions CI & PyInstaller Build-Workflow |
+| **Python TUI** | Python (Textual & Rich) | `uv init` + `uv venv` Pipeline, Terminal-UI mit Textual/Rich, responsive Layouts, Widgets, Theme-Toggle, optionale GitHub Actions CI |
+| **Web Frontend** | Web (Vite / TypeScript) | Schneller Vite-Stack, Multi-Framework (**React 19**, **Vue 3**, **Svelte 5**), Vitest Unit-Tests, optionale GitHub Actions CI & Nginx Multi-Stage Dockerfile |
+| **Web Fullstack** | Python + Web (FastAPI & Vite) | Sauberes Monorepo mit FastAPI Backend (`api/`) und modernem Vite React Frontend (`frontend/`), Vitest & Pytest, Docker Compose Setup |
 | **Rust CLI** | Rust (Cargo) | Projektstruktur mit Cargo.toml, Tests, optionaler GitHub Actions Workflow |
 | **Rust GUI** | Rust (Desktop GUI) | Auswahl des GUI-Frameworks (**egui / eframe**, **Iced**, **Tauri**, **Slint**, **GTK4**) mit detaillierten Tooltips |
+| **Go Anwendung** | Go (Go 1.23+) | Go Modules (`go.mod`), Architekturtyp (**CLI-Tool** mit Flags oder **REST API Service** mit `go-chi/chi`), Unit-Tests, optionale GitHub Actions CI & Multi-Stage Distroless Dockerfile |
+| **.NET C# Anwendung** | C# (.NET 8 / 9) | Moderner .NET-Stack, Projekttyp (**Web API / Minimal API**, **CLI-Konsole** oder **Avalonia XAML Desktop UI** mit Vollbildmodus), xUnit-Tests, optionale GitHub Actions CI & Multi-Stage Dockerfile |
 | **Node/TypeScript** | TypeScript (npm / Node.js) | Modernes TS-Setup, Vitest, optionale GitHub Actions CI & Dockerfile |
 
 ---

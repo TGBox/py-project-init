@@ -1,0 +1,44 @@
+{
+  "name": "{{ project_slug }}",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "{{ description }}",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+{% if framework == "vue" %}
+    "vue": "^3.5.13"
+{% elif framework == "svelte" %}
+    "svelte": "^5.0.0"
+{% else %}
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+{% endif %}
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0",
+    "jsdom": "^26.0.0",
+    "eslint": "^9.15.0",
+    "prettier": "^3.4.0",
+{% if framework == "vue" %}
+    "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "^2.4.6"
+{% elif framework == "svelte" %}
+    "@sveltejs/vite-plugin-svelte": "^5.0.0"
+{% else %}
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "@testing-library/react": "^16.1.0"
+{% endif %}
+  }
+}

@@ -1,0 +1,28 @@
+{% if framework == 'vue' %}
+import { createApp } from 'vue';
+import App from './App.vue';
+import './style.css';
+
+createApp(App).mount('#root');
+{% elif framework == 'svelte' %}
+import { mount } from 'svelte';
+import App from './App.svelte';
+import './style.css';
+
+const app = mount(App, {
+  target: document.getElementById('root')!,
+});
+
+export default app;
+{% else %}
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './style.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+{% endif %}

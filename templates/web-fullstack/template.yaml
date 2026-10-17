@@ -1,0 +1,33 @@
+name: "Web Fullstack"
+language: "Python"
+description: "Vollständige Fullstack-Webanwendung: FastAPI Backend (Python/uv) + Vite React Frontend (TypeScript) mit Docker Compose"
+options:
+  - id: "docker"
+    type: "bool"
+    label: "Docker Compose Setup"
+    description: "docker-compose.yml mit Backend- & Frontend-Diensten für Container-Betrieb"
+    default: true
+  - id: "github_actions"
+    type: "bool"
+    label: "GitHub Actions CI (Python & Node)"
+    description: "Automatisierter CI-Workflow für Backend (Ruff, Pytest) und Frontend (Typecheck, Vitest)"
+    default: true
+  - id: "vscode"
+    type: "bool"
+    label: "VS Code Konfiguration (.vscode/)"
+    description: "settings.json und launch.json für optimales Arbeiten mit Backend und Frontend"
+    default: true
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: "docker-compose.yml"
+    when: "docker"
+  - pattern: ".vscode/"
+    when: "vscode"
+hooks:
+  pre_init:
+    - ["uv", "init", "--bare", "backend"]
+    - ["uv", "venv", "backend/.venv"]
+  post_create:
+    - ["uv", "sync", "--project", "backend"]
+    - ["npm", "install", "--prefix", "frontend"]

@@ -1,0 +1,34 @@
+name: "Go App"
+language: "Go"
+description: "Modernes Go-Projekt mit Modulen (Go 1.23+), Auswahl zwischen CLI und Web-Service, Tests und Docker"
+options:
+  - id: "app_type"
+    type: "select"
+    label: "Anwendungstyp"
+    description: "Wähle zwischen CLI-Tool oder REST-Web-Service"
+    default: "cli"
+    choices:
+      - value: "cli"
+        label: "Kommandozeilen-Tool (CLI)"
+        description: "Eigenständiges CLI-Tool mit Argument-Parsing, Flags und Subcommands."
+      - value: "service"
+        label: "REST Web-Service"
+        description: "Schlanker HTTP REST-Microservice mit chi Router, Health-Check und Middleware."
+  - id: "github_actions"
+    type: "bool"
+    label: "GitHub Actions CI (Build & Test)"
+    description: "Automatisierter CI-Workflow mit golangci-lint und go test"
+    default: true
+  - id: "docker"
+    type: "bool"
+    label: "Multi-Stage Dockerfile"
+    description: "Multi-Stage Dockerfile mit Scratch- oder Alpine-Image für minimale Image-Größen (<20MB)"
+    default: false
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: "Dockerfile"
+    when: "docker"
+hooks:
+  post_create:
+    - ["go", "mod", "tidy"]

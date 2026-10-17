@@ -1,0 +1,28 @@
+# {{ project_name }}
+
+{{ description }}
+
+Entwickelt mit **Go 1.23+** ({% if app_type == 'service' %}REST Web-Service mit `chi`{% else %}Kommandozeilen-Tool (CLI){% endif %}).
+
+## Schnellstart
+
+Voraussetzung: [Go](https://go.dev/dl/) (Version >= 1.23)
+
+```bash
+# Abhängigkeiten synchronisieren
+go mod tidy
+
+# Anwendung ausführen
+go run .
+
+# Tests ausführen
+go test -v ./...
+
+# Binärdatei bauen
+go build -o bin/{{ project_slug }} .
+```
+{% if app_type == 'service' %}
+### API-Endpoints
+- `GET /health` - Health Check (`{"status": "healthy"}`)
+- `GET /` - Begrüßung
+{% endif %}

@@ -1,0 +1,28 @@
+# {{ project_name }}
+
+{{ description }}
+
+Entwickelt mit **.NET C#** ({% if app_type == 'webapi' %}ASP.NET Core Web API{% elif app_type == 'avalonia' %}Avalonia UI Desktop{% else %}Console Application{% endif %}).
+
+## Schnellstart
+
+Voraussetzung: [.NET SDK](https://dotnet.microsoft.com/download) (Version >= 8.0)
+
+```bash
+# Abhängigkeiten wiederherstellen
+dotnet restore
+
+# Anwendung ausführen
+dotnet run --project src/{{ project_name }}.csproj
+
+# Tests ausführen
+dotnet test
+
+# Release-Build erstellen
+dotnet build -c Release
+```
+{% if app_type == 'webapi' %}
+### API & Swagger Dokumentation
+- Swagger UI (im Entwicklungsmodus): `https://localhost:5001/swagger` oder `http://localhost:5000/swagger`
+- Health Endpoint: `GET /health`
+{% endif %}

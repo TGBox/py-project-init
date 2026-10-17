@@ -121,6 +121,11 @@ def run_cli(args: list[str] | None = None) -> int:
         "gitlab": {"enabled": False},
     }
 
+    for opt in template_meta.get("options", []):
+        opt_id = opt.get("id")
+        if opt_id and opt_id not in context:
+            context[opt_id] = opt.get("default")
+
     if parsed.gitlab_url:
         token = load_token(parsed.gitlab_url)
         if not token:

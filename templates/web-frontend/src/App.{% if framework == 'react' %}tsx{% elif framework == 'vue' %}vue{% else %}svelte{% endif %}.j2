@@ -1,0 +1,54 @@
+{% if framework == 'vue' %}
+<script setup lang="ts">
+import { ref } from 'vue';
+
+const count = ref(0);
+</script>
+
+<template>
+  <div class="container">
+    <h1>Willkommen bei {{ project_name }}</h1>
+    <p class="subtitle">{{ description }}</p>
+    <div class="counter-box">
+      <p style="margin-bottom: 1rem">Aktueller Zählerstand: <strong>{{ count }}</strong></p>
+      <button @click="count++">
+        Klick mich (+1)
+      </button>
+    </div>
+  </div>
+</template>
+{% elif framework == 'svelte' %}
+<script lang="ts">
+  let count = $state(0);
+</script>
+
+<div class="container">
+  <h1>Willkommen bei {{ project_name }}</h1>
+  <p class="subtitle">{{ description }}</p>
+  <div class="counter-box">
+    <p style="margin-bottom: 1rem">Aktueller Zählerstand: <strong>{count}</strong></p>
+    <button onclick={() => count++}>
+      Klick mich (+1)
+    </button>
+  </div>
+</div>
+{% else %}
+import React, { useState } from 'react';
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  return (
+    <div className="container">
+      <h1>Willkommen bei {{ project_name }}</h1>
+      <p className="subtitle">{{ description }}</p>
+      <div className="counter-box">
+        <p style={{ marginBottom: '1rem' }}>Aktueller Zählerstand: <strong>{count}</strong></p>
+        <button onClick={() => setCount(count + 1)}>
+          Klick mich (+1)
+        </button>
+      </div>
+    </div>
+  );
+}
+{% endif %}

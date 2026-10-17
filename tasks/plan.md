@@ -33,37 +33,37 @@ Alle Vorlagen integrieren sich nahtlos in die bestehende Generator-Architektur (
 
 ### Phase 1: Python-Spezialisierungen (Game & TUI)
 
-- [ ] Task 1: Vorlage `python-game` mit Pygame-ce & Arcade anlegen
-- [ ] Task 2: Vorlage `python-tui` mit Textual & Rich anlegen
-- [ ] Task 3: Generator-, UI-Skripte & Agent-Regeln für Game/TUI integrieren
+- [x] Task 1: Vorlage `python-game` mit Pygame-ce & Arcade anlegen
+- [x] Task 2: Vorlage `python-tui` mit Textual & Rich anlegen
+- [x] Task 3: Generator-, UI-Skripte & Agent-Regeln für Game/TUI integrieren
 
 ### Checkpoint: Python-Spezialisierungen
 
-- [ ] Unittests für Template-Loading und Generierung von `python-game` und `python-tui` erfolgreich
-- [ ] UI-Skript-Vorschläge (`_get_recommended_scripts`) verifiziert
+- [x] Unittests für Template-Loading und Generierung von `python-game` und `python-tui` erfolgreich
+- [x] UI-Skript-Vorschläge (`_get_recommended_scripts`) verifiziert
 
 ### Phase 2: Web-Frontend & Fullstack
 
-- [ ] Task 4: Vorlage `web-frontend` (Vite, TypeScript, React/Vue/Svelte) anlegen
-- [ ] Task 5: Vorlage `web-fullstack` (FastAPI + React Monorepo mit Docker Compose) anlegen
-- [ ] Task 6: UI-Skripte & Agent-Regeln für Frontend/Fullstack integrieren
+- [x] Task 4: Vorlage `web-frontend` (Vite, TypeScript, React/Vue/Svelte) anlegen
+- [x] Task 5: Vorlage `web-fullstack` (FastAPI + React Monorepo mit Docker Compose) anlegen
+- [x] Task 6: UI-Skripte & Agent-Regeln für Frontend/Fullstack integrieren
 
 ### Checkpoint: Web & Fullstack
 
-- [ ] Unittests für `web-frontend` und `web-fullstack` erfolgreich
-- [ ] Template-Optionen und File-Conditions im Generator geprüft
+- [x] Unittests für `web-frontend` und `web-fullstack` erfolgreich
+- [x] Template-Optionen und File-Conditions im Generator geprüft
 
 ### Phase 3: Polyglot-Erweiterung (Go & .NET)
 
-- [ ] Task 7: Vorlage `go-app` (Go CLI / Web-Service) anlegen
-- [ ] Task 8: Vorlage `dotnet-app` (.NET 8/9 C# Console / Web API / Avalonia) anlegen
-- [ ] Task 9: UI-Skripte, Agent-Regeln & Gesamttests für alle neuen Vorlagen
+- [x] Task 7: Vorlage `go-app` (Go CLI / Web-Service) anlegen
+- [x] Task 8: Vorlage `dotnet-app` (.NET 8/9 C# Console / Web API / Avalonia) anlegen
+- [x] Task 9: UI-Skripte, Agent-Regeln & Gesamttests für alle neuen Vorlagen
 
 ### Checkpoint: Gesamtsystem & Release-Bereitschaft
 
-- [ ] Alle Unittests in `tests/test_generator.py` und `tests/test_ui.py` grün
-- [ ] PyInstaller Spec (`ProjectScaffolder.spec`) validiert
-- [ ] Dokumentation & `README.md` aktualisiert
+- [x] Alle Unittests in `tests/test_generator.py` und `tests/test_ui.py` grün
+- [x] PyInstaller Spec (`ProjectScaffolder.spec`) validiert
+- [x] Dokumentation & `README.md` aktualisiert
 
 ## Risks and Mitigations
 

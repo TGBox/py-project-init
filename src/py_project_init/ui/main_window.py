@@ -18,7 +18,7 @@ from py_project_init.core.gitlab import GitLabClient, GitLabError, load_token, s
 from py_project_init.ui.styles import DARK_THEME
 from py_project_init.ui.dialogs import PreviewDialog, RetrofitDialog, CreateTemplateDialog
 
-CHECKED_TOOLS = ["git", "uv", "cargo", "npm"]
+CHECKED_TOOLS = ["git", "uv", "cargo", "npm", "go", "dotnet"]
 _VALID_NAME = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*$")
 
 
@@ -886,7 +886,21 @@ class MainWindow(QMainWindow):
         lang = template_meta.get("language", "").lower()
 
         t_id = (template_id or "").lower()
-        if "node" in t_id or "node" in lang or "typescript" in lang:
+        if "fullstack" in t_id:
+            return {
+                "main": "docker compose up",
+                "test": "pytest:backend",
+                "build": "docker compose build",
+            }
+        elif "frontend" in t_id:
+            return {
+                "main": "npm run dev",
+                "test": "vitest run",
+                "build": "npm run build",
+                "format": "prettier --write .",
+                "lint": "eslint .",
+            }
+        elif "node" in t_id or "node" in lang or "typescript" in lang:
             return {
                 "main": "node dist/index.js",
                 "test": "vitest run",
@@ -902,10 +916,41 @@ class MainWindow(QMainWindow):
                 "format": "cargo fmt",
                 "lint": "cargo clippy",
             }
+        elif "go" in t_id or "go" in lang:
+            return {
+                "main": "go run .",
+                "test": "go test ./...",
+                "build": "go build -o bin/app .",
+                "format": "go fmt ./...",
+                "lint": "golangci-lint run",
+            }
+        elif "dotnet" in t_id or "c#" in lang or "csharp" in lang:
+            return {
+                "main": "dotnet run",
+                "test": "dotnet test",
+                "build": "dotnet build -c Release",
+                "format": "dotnet format",
+            }
         elif "fastapi" in t_id:
             return {
                 "main": "src.main:run",
                 "test": "pytest:main",
+                "format": "src.tools:format_code",
+                "lint": "src.tools:lint_code",
+            }
+        elif "tui" in t_id:
+            return {
+                "main": "src.main:main",
+                "dev": "textual run --dev src/app.py",
+                "test": "pytest:main",
+                "format": "src.tools:format_code",
+                "lint": "src.tools:lint_code",
+            }
+        elif "game" in t_id:
+            return {
+                "main": "src.main:main",
+                "test": "pytest:main",
+                "build": "src.build:main",
                 "format": "src.tools:format_code",
                 "lint": "src.tools:lint_code",
             }

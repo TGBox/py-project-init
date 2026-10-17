@@ -1,0 +1,39 @@
+name: "Web Frontend"
+language: "TypeScript"
+description: "Modernes Single-Page-App Frontend mit Vite, TypeScript, Vitest und wählbarem UI-Framework"
+options:
+  - id: "framework"
+    type: "select"
+    label: "Frontend-Framework"
+    description: "Wähle das UI-Framework für dein Frontend"
+    default: "react"
+    choices:
+      - value: "react"
+        label: "React 19"
+        description: "Das weltweit meistgenutzte UI-Ökosystem mit Komponenten, Hooks und riesiger Bibliothek an Tools."
+      - value: "vue"
+        label: "Vue 3"
+        description: "Progressives Framework mit Single-File-Components (.vue), Composition API und exzellenter Entwicklerergonomie."
+      - value: "svelte"
+        label: "Svelte 5"
+        description: "Compiler-basiertes Framework mit Runes, winzigen Bundle-Größen und reaktivem Modell ohne Virtual DOM."
+  - id: "github_actions"
+    type: "bool"
+    label: "GitHub Actions CI (Lint, Typecheck, Test)"
+    description: "Automatisierter CI-Workflow mit ESLint, TypeScript Typecheck und Vitest"
+    default: true
+  - id: "docker"
+    type: "bool"
+    label: "Dockerfile (Nginx Production Serve)"
+    description: "Multi-Stage Dockerfile mit Node-Build und schlankem Nginx-Alpine Webserver"
+    default: false
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: "Dockerfile"
+    when: "docker"
+  - pattern: "nginx.conf"
+    when: "docker"
+hooks:
+  post_create:
+    - ["npm", "install"]

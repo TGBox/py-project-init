@@ -76,6 +76,39 @@ class TestMainWindow(unittest.TestCase):
             self.assertEqual(node_scripts.get("test"), "vitest run")
             self.assertEqual(node_scripts.get("build"), "tsc")
 
+        idx_tui = self.window.template_combo.findData("python-tui")
+        if idx_tui >= 0:
+            self.window.template_combo.setCurrentIndex(idx_tui)
+            tui_scripts = self.window._get_custom_scripts_dict()
+            self.assertEqual(tui_scripts.get("dev"), "textual run --dev src/app.py")
+
+        idx_web = self.window.template_combo.findData("web-frontend")
+        if idx_web >= 0:
+            self.window.template_combo.setCurrentIndex(idx_web)
+            web_scripts = self.window._get_custom_scripts_dict()
+            self.assertEqual(web_scripts.get("main"), "npm run dev")
+            self.assertEqual(web_scripts.get("test"), "vitest run")
+
+        idx_fs = self.window.template_combo.findData("web-fullstack")
+        if idx_fs >= 0:
+            self.window.template_combo.setCurrentIndex(idx_fs)
+            fs_scripts = self.window._get_custom_scripts_dict()
+            self.assertEqual(fs_scripts.get("main"), "docker compose up")
+
+        idx_go = self.window.template_combo.findData("go-app")
+        if idx_go >= 0:
+            self.window.template_combo.setCurrentIndex(idx_go)
+            go_scripts = self.window._get_custom_scripts_dict()
+            self.assertEqual(go_scripts.get("main"), "go run .")
+            self.assertEqual(go_scripts.get("test"), "go test ./...")
+
+        idx_dotnet = self.window.template_combo.findData("dotnet-app")
+        if idx_dotnet >= 0:
+            self.window.template_combo.setCurrentIndex(idx_dotnet)
+            dotnet_scripts = self.window._get_custom_scripts_dict()
+            self.assertEqual(dotnet_scripts.get("main"), "dotnet run")
+            self.assertEqual(dotnet_scripts.get("test"), "dotnet test")
+
     def test_preview_dialog(self):
         """Tests that PreviewDialog loads files and displays content on selection and clicks."""
         # 1. Test dict format as produced by generator.preview()

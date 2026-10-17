@@ -1,0 +1,32 @@
+# {{ project_name }}
+
+{{ description }}
+
+Terminal User Interface (TUI) basierend auf [Textual](https://textual.textualize.io/) und [Rich](https://rich.readthedocs.io/).
+
+## Features & Tastenbelegung
+- **q:** Anwendung beenden
+- **d:** Farbschema umschalten (Dark / Light Mode)
+- **Tab / Shift+Tab:** Zwischen Widgets navigieren
+
+## Schnellstart
+
+Voraussetzung: [uv](https://docs.astral.sh/uv/)
+
+```bash
+# Abhängigkeiten installieren
+uv sync
+
+# TUI-Anwendung starten
+uv run main
+
+# Textual Console Live-Debugging (Entwicklermodus)
+uv run textual run --dev src/app.py
+
+# Tests ausführen
+uv run test
+
+# Code formatieren & prüfen
+uv run format
+uv run lint
+```

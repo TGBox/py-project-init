@@ -1,0 +1,50 @@
+{% if app_type == 'webapi' %}
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+
+app.MapGet("/health", () => Results.Ok(new
+{
+    Status = "healthy",
+    App = "{{ project_name }}",
+    Timestamp = DateTime.UtcNow
+}))
+.WithName("GetHealth")
+.WithOpenApi();
+
+app.MapGet("/", () => "Willkommen bei {{ project_name }}!");
+
+app.Run();
+{% elif app_type == 'avalonia' %}
+using Avalonia;
+using System;
+
+namespace {{ project_name | replace("-", " ") | replace("_", " ") | title | replace(" ", "") }};
+
+class Program
+{
+    [STAThread]
+    public static void Main(string[] args) => BuildAvaloniaApp()
+        .StartWithClassicDesktopLifetime(args);
+
+    public static AppBuilder BuildAvaloniaApp()
+        => AppBuilder.Configure<App>()
+            .UsePlatformDetect()
+            .WithInterFont()
+            .LogToTrace();
+}
+{% else %}
+Console.WriteLine("Willkommen bei {{ project_name }}!");
+Console.WriteLine("Argumente: " + string.Join(", ", args));
+{% endif %}

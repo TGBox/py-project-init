@@ -1,0 +1,42 @@
+# {{ project_name }}
+
+{{ description }}
+
+Monorepo Fullstack-Webanwendung bestehend aus:
+- **Backend:** [FastAPI](https://fastapi.tiangolo.com/) mit Python & `uv` (Port 8000)
+- **Frontend:** [React 19](https://react.dev/) mit [Vite](https://vitejs.dev/) & TypeScript (Port 5173)
+- **Container:** Docker Compose für lokalen Betrieb & Deployment
+
+## Schnellstart
+
+### 1. Mit Docker Compose (Empfohlen für schnellen Komplettstart)
+```bash
+docker compose up --build
+```
+- Frontend: `http://localhost:5173`
+- Backend API Docs: `http://localhost:8000/docs`
+
+### 2. Lokale Entwicklung
+
+#### Backend starten:
+```bash
+cd backend
+uv sync
+uv run uvicorn src.main:app --reload --port 8000
+```
+
+#### Frontend starten:
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+### Tests ausführen:
+```bash
+# Backend Tests (Pytest)
+cd backend && uv run pytest
+
+# Frontend Tests (Vitest)
+cd frontend && npm test
+```

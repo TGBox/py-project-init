@@ -1,0 +1,21 @@
+from fastapi.testclient import TestClient
+from src.main import app
+
+client = TestClient(app)
+
+
+def test_health_endpoint() -> None:
+    """Verifies health endpoint returns healthy status."""
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "healthy"
+    assert data["app"] == "{{ project_name }}"
+
+
+def test_items_endpoint() -> None:
+    """Verifies items endpoint returns sample data."""
+    response = client.get("/api/items")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) >= 3

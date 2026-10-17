@@ -1,0 +1,44 @@
+import React, { useEffect, useState } from 'react';
+
+interface Item {
+  id: string;
+  title: string;
+  description: string;
+}
+
+export default function App() {
+  const [backendStatus, setBackendStatus] = useState<string>('Verbindung wird geprüft...');
+  const [items, setItems] = useState<Item[]>([]);
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then((res) => res.json())
+      .then((data) => setBackendStatus(`Verbunden (${data.status})`))
+      .catch(() => setBackendStatus('Backend nicht erreichbar (Port 8000 prüfen)'));
+
+    fetch('/api/items')
+      .then((res) => res.json())
+      .then((data) => setItems(data))
+      .catch(() => {});
+  }, []);
+
+  return (
+    <div className="container">
+      <h1>{{ project_name }}</h1>
+      <p className="desc">{{ description }}</p>
+
+      <div className="status-badge">
+        <span>●</span> Backend: {backendStatus}
+      </div>
+
+      <div className="items-grid">
+        {items.map((item) => (
+          <div key={item.id} className="item-card">
+            <h3>{item.title}</h3>
+            <p>{item.description}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

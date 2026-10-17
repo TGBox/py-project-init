@@ -212,6 +212,10 @@ class TemplateManager:
         for root, dirs, files in template_path.walk():
             check_cancel()
             rel_path = root.relative_to(template_path)
+            if rel_path != Path(".") and not self._should_include(rel_path, "", file_conditions, context):
+                dirs.clear()
+                continue
+
             if "template.yaml" in files:
                 files.remove("template.yaml")
 
@@ -433,12 +437,19 @@ class TemplateManager:
 
     def _should_include(self, rel_path: Path, filename: str, conditions: list[dict], context: dict) -> bool:
         """Returns False if a when-condition is not met."""
-        full_rel = str(rel_path / filename).replace("\\", "/")
+        if filename:
+            full_rel = str(rel_path / filename).replace("\\", "/")
+        else:
+            full_rel = str(rel_path).replace("\\", "/").rstrip("/") + "/"
         for entry in conditions:
             pattern = entry.get("pattern", "")
             ctx_key = entry.get("when", "")
-            if full_rel.startswith(pattern):
-                if not context.get(ctx_key, False):
+            target_val = entry.get("value")
+            if full_rel.startswith(pattern) or full_rel.rstrip("/") == pattern.rstrip("/"):
+                if target_val is not None:
+                    if context.get(ctx_key) != target_val:
+                        return False
+                elif not context.get(ctx_key, False):
                     return False
         return True
 
@@ -696,6 +707,10 @@ class TemplateManager:
         # 4. Template files
         for root, dirs, files in template_path.walk():
             rel_path = root.relative_to(template_path)
+            if rel_path != Path(".") and not self._should_include(rel_path, "", file_conditions, context):
+                dirs.clear()
+                continue
+
             if "template.yaml" in files:
                 files.remove("template.yaml")
 

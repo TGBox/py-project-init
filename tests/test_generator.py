@@ -17,7 +17,14 @@ class TestTemplateManager(unittest.TestCase):
         self.assertIn("python-cli", self.manager.templates)
         self.assertIn("python-fastapi", self.manager.templates)
         self.assertIn("python-gui", self.manager.templates)
+        self.assertIn("python-game", self.manager.templates)
+        self.assertIn("python-tui", self.manager.templates)
+        self.assertIn("web-frontend", self.manager.templates)
+        self.assertIn("web-fullstack", self.manager.templates)
+        self.assertIn("go-app", self.manager.templates)
+        self.assertIn("dotnet-app", self.manager.templates)
         self.assertIn("rust-cli", self.manager.templates)
+        self.assertIn("rust-gui", self.manager.templates)
         self.assertIn("node-ts", self.manager.templates)
 
     def test_get_available_hooks(self):
@@ -51,6 +58,22 @@ class TestTemplateManager(unittest.TestCase):
         # PySide6 GUI recommendations
         gui_rec = self.manager.get_recommended_agent_configs("python-gui", "Python")
         self.assertIn("pyside6_gui_conventions", gui_rec["rules"])
+
+        # Python Game recommendations
+        game_rec = self.manager.get_recommended_agent_configs("python-game", "Python")
+        self.assertIn("game_development_guidelines", game_rec["rules"])
+
+        # Web Frontend recommendations
+        web_rec = self.manager.get_recommended_agent_configs("web-frontend", "TypeScript")
+        self.assertIn("web_frontend_standards", web_rec["rules"])
+
+        # Go recommendations
+        go_rec = self.manager.get_recommended_agent_configs("go-app", "Go")
+        self.assertIn("go_standards", go_rec["rules"])
+
+        # .NET C# recommendations
+        dotnet_rec = self.manager.get_recommended_agent_configs("dotnet-app", "C#")
+        self.assertIn("csharp_standards", dotnet_rec["rules"])
 
     def test_merge_gitignore(self):
         """Verifies intelligent merging of gitignore without duplicates."""
@@ -241,6 +264,163 @@ class TestTemplateManager(unittest.TestCase):
         pyproject_preview = files_map["pyproject.toml"]["content"]
         self.assertIn("preview_project", pyproject_preview)
         self.assertIn("Preview Tester", pyproject_preview)
+
+    def test_preview_python_game_and_tui(self):
+        """Verifies template rendering and preview for python-game and python-tui."""
+        # 1. python-game with Pygame-ce
+        game_ctx = {
+            "project_name": "space_invaders",
+            "project_slug": "space_invaders",
+            "description": "2D Space Shooter",
+            "framework": "pygame-ce",
+            "github_actions": True,
+            "vscode": True,
+            "enable_git_hooks": False,
+            "enable_agent_configs": True,
+            "selected_agent_rules": ["general_guidelines", "game_development_guidelines"],
+            "selected_agent_skills": ["code-review"],
+        }
+        game_files = self.manager.preview("python-game", game_ctx)
+        self.assertIn("pyproject.toml", game_files)
+        self.assertIn("src/main.py", game_files)
+        self.assertIn("src/settings.py", game_files)
+        self.assertIn("tests/test_game.py", game_files)
+        self.assertIn(".agents/rules/game_development_guidelines.md", game_files)
+        self.assertIn("pygame-ce", game_files["pyproject.toml"]["content"])
+        self.assertIn("F11", game_files["src/main.py"]["content"])
+
+        # 2. python-game with Arcade
+        game_ctx["framework"] = "arcade"
+        arcade_files = self.manager.preview("python-game", game_ctx)
+        self.assertIn("arcade", arcade_files["pyproject.toml"]["content"])
+        self.assertIn("arcade.Window", arcade_files["src/main.py"]["content"])
+
+        # 3. python-tui
+        tui_ctx = {
+            "project_name": "system_monitor",
+            "project_slug": "system_monitor",
+            "description": "Terminal Monitor",
+            "github_actions": True,
+            "vscode": True,
+            "enable_git_hooks": False,
+            "enable_agent_configs": False,
+        }
+        tui_files = self.manager.preview("python-tui", tui_ctx)
+        self.assertIn("pyproject.toml", tui_files)
+        self.assertIn("src/app.py", tui_files)
+        self.assertIn("src/main.py", tui_files)
+        self.assertIn("textual", tui_files["pyproject.toml"]["content"])
+        self.assertIn("SystemMonitorApp", tui_files["src/app.py"]["content"])
+
+    def test_preview_web_frontend_and_fullstack(self):
+        """Verifies template rendering and preview for web-frontend and web-fullstack."""
+        # 1. web-frontend (React)
+        react_ctx = {
+            "project_name": "dashboard_app",
+            "project_slug": "dashboard_app",
+            "description": "React Dashboard",
+            "framework": "react",
+            "github_actions": True,
+            "docker": True,
+            "enable_git_hooks": False,
+            "enable_agent_configs": True,
+            "selected_agent_rules": ["web_frontend_standards"],
+            "selected_agent_skills": ["code-review"],
+        }
+        react_files = self.manager.preview("web-frontend", react_ctx)
+        self.assertIn("package.json", react_files)
+        self.assertIn("src/App.tsx", react_files)
+        self.assertIn("src/main.tsx", react_files)
+        self.assertIn("tests/App.test.tsx", react_files)
+        self.assertIn("Dockerfile", react_files)
+        self.assertIn("nginx.conf", react_files)
+        self.assertIn(".agents/rules/web_frontend_standards.md", react_files)
+        self.assertIn("react", react_files["package.json"]["content"])
+
+        # 2. web-frontend (Vue)
+        vue_ctx = dict(react_ctx, framework="vue", docker=False)
+        vue_files = self.manager.preview("web-frontend", vue_ctx)
+        self.assertIn("src/App.vue", vue_files)
+        self.assertIn("src/main.ts", vue_files)
+        self.assertNotIn("Dockerfile", vue_files)
+
+        # 3. web-fullstack
+        fullstack_ctx = {
+            "project_name": "saas_platform",
+            "project_slug": "saas_platform",
+            "description": "Fullstack Platform",
+            "docker": True,
+            "github_actions": True,
+            "vscode": True,
+            "enable_git_hooks": False,
+            "enable_agent_configs": True,
+            "selected_agent_rules": ["fastapi_best_practices", "web_frontend_standards"],
+            "selected_agent_skills": ["code-review"],
+        }
+        fs_files = self.manager.preview("web-fullstack", fullstack_ctx)
+        self.assertIn("docker-compose.yml", fs_files)
+        self.assertIn("backend/pyproject.toml", fs_files)
+        self.assertIn("backend/src/main.py", fs_files)
+        self.assertIn("backend/tests/test_api.py", fs_files)
+        self.assertIn("frontend/package.json", fs_files)
+        self.assertIn("frontend/src/App.tsx", fs_files)
+        self.assertIn("frontend/vite.config.ts", fs_files)
+        self.assertIn("/api/health", fs_files["backend/src/main.py"]["content"])
+        self.assertIn("proxy", fs_files["frontend/vite.config.ts"]["content"])
+
+    def test_preview_go_and_dotnet_app(self):
+        """Verifies template rendering and preview for go-app and dotnet-app."""
+        # 1. go-app (CLI)
+        go_ctx = {
+            "project_name": "backup_tool",
+            "project_slug": "backup_tool",
+            "description": "Go Backup CLI",
+            "app_type": "cli",
+            "github_actions": True,
+            "docker": False,
+            "enable_git_hooks": False,
+            "enable_agent_configs": True,
+            "selected_agent_rules": ["go_standards"],
+            "selected_agent_skills": ["code-review"],
+        }
+        go_files = self.manager.preview("go-app", go_ctx)
+        self.assertIn("go.mod", go_files)
+        self.assertIn("main.go", go_files)
+        self.assertIn("main_test.go", go_files)
+        self.assertIn(".agents/rules/go_standards.md", go_files)
+        self.assertIn("module backup_tool", go_files["go.mod"]["content"])
+        self.assertNotIn("chi", go_files["go.mod"]["content"])
+
+        # 2. go-app (Service)
+        go_svc_ctx = dict(go_ctx, app_type="service", docker=True)
+        go_svc_files = self.manager.preview("go-app", go_svc_ctx)
+        self.assertIn("chi", go_svc_files["go.mod"]["content"])
+        self.assertIn("SetupRouter", go_svc_files["main.go"]["content"])
+        self.assertIn("Dockerfile", go_svc_files)
+
+        # 3. dotnet-app (Web API)
+        dotnet_ctx = {
+            "project_name": "InvoiceService",
+            "project_slug": "invoice_service",
+            "description": "Invoice API",
+            "app_type": "webapi",
+            "dotnet_version": "net8.0",
+            "github_actions": True,
+            "docker": True,
+            "enable_git_hooks": False,
+            "enable_agent_configs": True,
+            "selected_agent_rules": ["csharp_standards"],
+            "selected_agent_skills": ["code-review"],
+        }
+        dotnet_files = self.manager.preview("dotnet-app", dotnet_ctx)
+        self.assertIn("src/InvoiceService.csproj", dotnet_files)
+        self.assertIn("src/Program.cs", dotnet_files)
+        self.assertIn("tests/InvoiceService.Tests.csproj", dotnet_files)
+        self.assertIn("tests/UnitTest1.cs", dotnet_files)
+        self.assertIn(".agents/rules/csharp_standards.md", dotnet_files)
+        self.assertIn("net8.0", dotnet_files["src/InvoiceService.csproj"]["content"])
+        self.assertIn("WebApplication.CreateBuilder", dotnet_files["src/Program.cs"]["content"])
+        self.assertIn("Dockerfile", dotnet_files)
 
     def test_retrofit_functionality(self):
         """Verifies retrofitting hooks and agent configs into an existing project."""

@@ -1,0 +1,37 @@
+name: "Python Game"
+language: "Python"
+description: "Game-Entwicklung in Python mit Pygame-ce oder Arcade, Game-Loop, Asset-Struktur und Sound-Support"
+options:
+  - id: "framework"
+    type: "select"
+    label: "Game-Framework"
+    description: "Wähle das Framework für dein Spiel"
+    default: "pygame-ce"
+    choices:
+      - value: "pygame-ce"
+        label: "Pygame-ce (Community Edition)"
+        description: "Moderner, optimierter Fork von Pygame. Schnell, einsteigerfreundlich, ideal für 2D-Spiele, Pixel-Art und eigene Engine-Mechaniken."
+      - value: "arcade"
+        label: "Python Arcade"
+        description: "Moderne 2D-Game-Bibliothek auf Basis von OpenGL und Pyglet. Unterstützt Hardware-Beschleunigung, Physik-Engines (Pymunk) und Tilemaps."
+  - id: "github_actions"
+    type: "bool"
+    label: "GitHub Actions CI (Lint & Test)"
+    description: "Automatisierter CI-Workflow mit Ruff und Pytest"
+    default: true
+  - id: "vscode"
+    type: "bool"
+    label: "VS Code Konfiguration (.vscode/)"
+    description: "settings.json und launch.json für optimale Entwicklungserfahrung in VS Code"
+    default: true
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: ".vscode/"
+    when: "vscode"
+hooks:
+  pre_init:
+    - ["uv", "init", "--bare"]
+    - ["uv", "venv"]
+  post_create:
+    - ["uv", "sync"]

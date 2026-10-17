@@ -1,0 +1,45 @@
+# {{ project_name }}
+
+{{ description }}
+
+Modernes Web-Frontend mit **Vite**, **TypeScript** und **{% if framework == 'vue' %}Vue 3{% elif framework == 'svelte' %}Svelte 5{% else %}React 19{% endif %}**.
+
+## Schnellstart
+
+Voraussetzung: [Node.js](https://nodejs.org/) (Version >= 20)
+
+```bash
+# Abhängigkeiten installieren
+npm install
+
+# Lokalen Entwicklungsserver starten
+npm run dev
+
+# Tests mit Vitest ausführen
+npm run test
+
+# Produktions-Bundle bauen
+npm run build
+
+# Vorschau des Produktions-Builds
+npm run preview
+
+# Linter & Formatter ausführen
+npm run lint
+npm run format
+```
+
+## Projektstruktur
+```
+{{ project_name }}/
+├── src/
+│   ├── App.{% if framework == 'vue' %}vue{% elif framework == 'svelte' %}svelte{% else %}tsx{% endif %}
+│   ├── main.{% if framework == 'vue' or framework == 'svelte' %}ts{% else %}tsx{% endif %}
+│   └── style.css
+├── tests/
+│   └── App.test.{% if framework == 'vue' or framework == 'svelte' %}ts{% else %}tsx{% endif %}
+├── index.html
+├── package.json
+├── tsconfig.json
+└── vite.config.ts
+```

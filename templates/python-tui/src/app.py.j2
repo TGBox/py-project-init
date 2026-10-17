@@ -1,0 +1,76 @@
+"""Main Textual application class."""
+
+from textual.app import App, ComposeResult
+from textual.containers import Container, Horizontal, Vertical
+from textual.widgets import Button, Footer, Header, Label, Static
+
+
+class {{ project_name | replace("-", " ") | replace("_", " ") | title | replace(" ", "") }}App(App):
+    """A modern Textual application."""
+
+    CSS = """
+    Screen {
+        background: $surface;
+    }
+
+    #sidebar {
+        width: 32;
+        background: $panel;
+        border-right: solid $primary;
+        padding: 1 2;
+    }
+
+    #content {
+        padding: 2 4;
+        height: 1fr;
+    }
+
+    .welcome-title {
+        font-size: 18;
+        text-style: bold;
+        color: $primary;
+        margin-bottom: 1;
+    }
+
+    .info-label {
+        color: $text-muted;
+        margin-bottom: 2;
+    }
+
+    Button {
+        margin-top: 1;
+        width: 100%;
+    }
+    """
+
+    BINDINGS = [
+        ("q", "quit", "Beenden"),
+        ("d", "toggle_dark", "Farbschema"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+        with Horizontal():
+            with Vertical(id="sidebar"):
+                yield Label("Navigation", classes="welcome-title")
+                yield Button("Dashboard", id="btn_dash", variant="primary")
+                yield Button("Einstellungen", id="btn_settings")
+                yield Button("Beenden", id="btn_quit", variant="error")
+            with Container(id="content"):
+                yield Label("Willkommen bei {{ project_name }}!", classes="welcome-title")
+                yield Static(
+                    "Dieses Terminal-Projekt wurde mit Textual und Rich aufgesetzt.\n"
+                    "Drücke [b]d[/b] zum Umschalten des Themes oder [b]q[/b] zum Beenden.",
+                    classes="info-label",
+                )
+                yield Label("Status: Bereit", id="status_label")
+        yield Footer()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        status = self.query_one("#status_label", Label)
+        if event.button.id == "btn_dash":
+            status.update("Status: Dashboard aktiv")
+        elif event.button.id == "btn_settings":
+            status.update("Status: Einstellungen geöffnet")
+        elif event.button.id == "btn_quit":
+            self.exit()

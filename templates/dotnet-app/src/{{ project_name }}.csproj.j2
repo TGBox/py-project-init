@@ -1,0 +1,25 @@
+<Project Sdk="{% if app_type == 'webapi' %}Microsoft.NET.Sdk.Web{% else %}Microsoft.NET.Sdk{% endif %}">
+
+  <PropertyGroup>
+    <TargetFramework>{{ dotnet_version }}</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+{% if app_type == 'console' %}
+    <OutputType>Exe</OutputType>
+{% elif app_type == 'avalonia' %}
+    <OutputType>WinExe</OutputType>
+{% endif %}
+  </PropertyGroup>
+
+  <ItemGroup>
+{% if app_type == 'webapi' %}
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+{% elif app_type == 'avalonia' %}
+    <PackageReference Include="Avalonia" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.0" />
+{% endif %}
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,25 @@
+name: "Python TUI"
+language: "Python"
+description: "Terminal User Interface (TUI) mit Textual und Rich, reaktivem Layout, Widgets und Keybindings"
+options:
+  - id: "github_actions"
+    type: "bool"
+    label: "GitHub Actions CI (Lint & Test)"
+    description: "Automatisierter CI-Workflow mit Ruff und Pytest"
+    default: true
+  - id: "vscode"
+    type: "bool"
+    label: "VS Code Konfiguration (.vscode/)"
+    description: "settings.json und launch.json für optimale Entwicklungserfahrung in VS Code"
+    default: true
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: ".vscode/"
+    when: "vscode"
+hooks:
+  pre_init:
+    - ["uv", "init", "--bare"]
+    - ["uv", "venv"]
+  post_create:
+    - ["uv", "sync"]

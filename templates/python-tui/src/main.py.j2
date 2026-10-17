@@ -1,0 +1,12 @@
+"""Application entry point."""
+
+from src.app import {{ project_name | replace("-", " ") | replace("_", " ") | title | replace(" ", "") }}App
+
+
+def main() -> None:
+    app = {{ project_name | replace("-", " ") | replace("_", " ") | title | replace(" ", "") }}App()
+    app.run()
+
+
+if __name__ == "__main__":
+    main()

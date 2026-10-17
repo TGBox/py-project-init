@@ -1,0 +1,33 @@
+{% if framework == 'vue' %}
+import { describe, it, expect } from 'vitest';
+import { mount } from '@vue/test-utils';
+import App from '../src/App.vue';
+
+describe('App', () => {
+  it('renders headline', () => {
+    const wrapper = mount(App);
+    expect(wrapper.text()).toContain('Willkommen');
+  });
+});
+{% elif framework == 'svelte' %}
+import { describe, it, expect } from 'vitest';
+import App from '../src/App.svelte';
+
+describe('App', () => {
+  it('is defined', () => {
+    expect(App).toBeDefined();
+  });
+});
+{% else %}
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import React from 'react';
+import App from '../src/App';
+
+describe('App', () => {
+  it('renders headline', () => {
+    render(<App />);
+    expect(screen.getByText(/Willkommen/i)).toBeDefined();
+  });
+});
+{% endif %}

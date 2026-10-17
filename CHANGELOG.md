@@ -2,7 +2,8 @@
 
 ## SemVer v3.0.1
 
-- 2026-10-17 (c6b1c15): feat: add new planning documents
+- 2026-10-17 (25a5025): feat: add new templates for multiple different program types, update and specify the agent rules templates to match the new formats, update the script commands for the different types and languages
+- 2026-10-17 (f7b54c0): feat: add new planning documents
 - 2026-10-16 (ebb38e7): fix: fix project.scripts block in python project config having too many empty lines
 - 2026-10-16 (fcd063e): fix: remove problematic additional check against missing key authority in our gitlab certificate authority
 - 2026-10-16 (8f0e920): fix: update uv.lock file

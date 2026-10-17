@@ -1,0 +1,49 @@
+name: ".NET C# App"
+language: "C#"
+description: "Moderne .NET 8/9 C# Anwendung mit Auswahl zwischen Web API, CLI Console und Avalonia Cross-Platform GUI"
+options:
+  - id: "app_type"
+    type: "select"
+    label: "Projekttyp"
+    description: "Wähle die Art deiner .NET-Anwendung"
+    default: "webapi"
+    choices:
+      - value: "webapi"
+        label: "ASP.NET Core Web API"
+        description: "Moderne REST-API mit Minimal APIs, Swagger OpenAPI und strukturierter Validierung."
+      - value: "console"
+        label: "Console Application (CLI)"
+        description: "Kommandozeilen-Anwendung mit Top-Level Statements und Dependency Injection."
+      - value: "avalonia"
+        label: "Avalonia UI (Cross-Platform Desktop)"
+        description: "Moderne XAML-basierte Desktop-App für Windows, macOS und Linux."
+  - id: "dotnet_version"
+    type: "select"
+    label: ".NET Version"
+    description: "Wähle die Ziel-Framework-Version"
+    default: "net8.0"
+    choices:
+      - value: "net8.0"
+        label: ".NET 8.0 (LTS)"
+        description: "Long-Term Support Version mit garantierter Stabilität und breitem Ökosystem."
+      - value: "net9.0"
+        label: ".NET 9.0 (Standard)"
+        description: "Neueste Version mit Performance-Optimierungen und neuen Sprach-Features."
+  - id: "github_actions"
+    type: "bool"
+    label: "GitHub Actions CI (Build & Test)"
+    description: "Automatisierter CI-Workflow mit dotnet build und dotnet test"
+    default: true
+  - id: "docker"
+    type: "bool"
+    label: "Multi-Stage Dockerfile (Chiseled Ubuntu / Alpine)"
+    description: "Container-Build mit dotnet publish und schlankem Microsoft-Runtime-Image"
+    default: false
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: "Dockerfile"
+    when: "docker"
+hooks:
+  post_create:
+    - ["dotnet", "restore"]

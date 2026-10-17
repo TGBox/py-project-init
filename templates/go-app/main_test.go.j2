@@ -1,0 +1,45 @@
+package main
+
+import (
+{% if app_type == 'service' %}
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestHealthEndpoint(t *testing.T) {
+	router := SetupRouter()
+	req, err := http.NewRequest("GET", "/health", nil)
+	if err != nil {
+		t.Fatalf("Konnte Request nicht erstellen: %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("Unerwarteter Statuscode: erwartet %v, erhalten %v", http.StatusOK, status)
+	}
+
+	if !strings.Contains(rr.Body.String(), "healthy") {
+		t.Errorf("Antwort enthält kein 'healthy': %s", rr.Body.String())
+	}
+}
+{% else %}
+	"strings"
+	"testing"
+)
+
+func TestGreet(t *testing.T) {
+	defaultMsg := Greet("")
+	if !strings.Contains(defaultMsg, "Willkommen") {
+		t.Errorf("Unerwarteter Standardgruß: %s", defaultMsg)
+	}
+
+	customMsg := Greet("Daniel")
+	if !strings.Contains(customMsg, "Daniel") {
+		t.Errorf("Name fehlt im Gruß: %s", customMsg)
+	}
+}
+{% endif %}

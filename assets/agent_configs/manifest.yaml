@@ -29,6 +29,14 @@ rules:
     templates: ["python-gui"]
     default: true
 
+  - id: "game_development_guidelines"
+    name: "Game Development & 2D-Engine Richtlinien"
+    description: "Best Practices für 2D-Spiele: Saubere Game-Loop (Event/Update/Draw), Delta-Time-Bewegung, Fenster- und Vollbildmodus, Entkopplung von Spiellogik und Rendering."
+    file: "rules/game_development_guidelines.md"
+    languages: ["Python"]
+    templates: ["python-game"]
+    default: true
+
   - id: "rust_standards"
     name: "Rust & Cargo Best Practices"
     description: "Idiomatisches Rust: Clippy-Konformität, sichere Fehlerbehandlung (thiserror/anyhow) und speichereffiziente Datenstrukturen."
@@ -41,6 +49,30 @@ rules:
     description: "Strikte Typisierung, saubere ESM-Module, Vitest Test-Setup und Linter-Konformität."
     file: "rules/typescript_standards.md"
     languages: ["TypeScript"]
+    default: true
+
+  - id: "web_frontend_standards"
+    name: "Web Frontend & Modern UI Best Practices"
+    description: "Komponenten-Architektur, responsive Layouts, semantisches HTML, Barrierefreiheit (a11y) und reaktives State-Management mit Vite."
+    file: "rules/web_frontend_standards.md"
+    languages: ["TypeScript", "JavaScript"]
+    templates: ["web-frontend", "web-fullstack"]
+    default: true
+
+  - id: "go_standards"
+    name: "Go & Modul-Standards"
+    description: "Idiomatisches Go: Klare Fehlerbehandlung (`if err != nil`), strukturierte Interfaces, Concurrency mit Goroutinen/Channels und schlanke Abhängigkeiten."
+    file: "rules/go_standards.md"
+    languages: ["Go"]
+    templates: ["go-app"]
+    default: true
+
+  - id: "csharp_standards"
+    name: "C# & .NET Best Practices"
+    description: "Moderne .NET-Konventionen: Nullable Reference Types, Dependency Injection, Async/Await-Muster und xUnit-Testarchitektur."
+    file: "rules/csharp_standards.md"
+    languages: ["C#"]
+    templates: ["dotnet-app"]
     default: true
 
 skills:

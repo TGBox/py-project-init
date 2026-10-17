@@ -1,0 +1,44 @@
+[project]
+name = "{{ project_name }}"
+version = "0.1.0"
+description = "{{ description }}"
+requires-python = ">=3.11"
+{% if author %}
+authors = [
+    { name = "{{ author }}"{% if author_email %}, email = "{{ author_email }}"{% endif %} }
+]
+{% endif %}
+{% if license %}
+license = { text = "{{ license }}" }
+{% endif %}
+dependencies = [
+{% if framework == "arcade" %}
+    "arcade>=3.0.0",
+{% else %}
+    "pygame-ce>=2.5.0",
+{% endif %}
+]
+
+[project.scripts]
+{% set scripts = {project_name: "src.main:main", "main": "src.main:main", "test": "pytest:main", "build": "src.build:main", "format": "src.tools:format_code", "lint": "src.tools:lint_code"} %}
+{% if custom_scripts %}{% set _ = scripts.update(custom_scripts) %}{% endif %}
+{% for s_name, s_cmd in scripts.items() %}
+{{ s_name }} = "{{ s_cmd }}"
+{% endfor %}
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pyinstaller>=6.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.ruff]
+line-length = 100

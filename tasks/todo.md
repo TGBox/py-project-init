@@ -8,16 +8,16 @@
 
 **Acceptance criteria:**
 
-- [ ] `templates/python-game/template.yaml` definiert Framework-Option mit `pygame-ce` (Default) und `arcade`.
-- [ ] `pyproject.toml.j2` bindet je nach Auswahl `pygame-ce>=2.5.0` oder `arcade>=3.0.0` ein.
-- [ ] Spielbare Einstiegsdatei `src/main.py.j2` mit Game-Loop, Fensterinitialisierung und Event-Handling für das gewählte Framework.
-- [ ] Unit-Tests in `tests/test_game.py.j2` für Basis-Logik und Zustände.
-- [ ] Pre-Init (`uv init`, `uv venv`) und Post-Create (`uv sync`) Hooks konfiguriert.
+- [x] `templates/python-game/template.yaml` definiert Framework-Option mit `pygame-ce` (Default) und `arcade`.
+- [x] `pyproject.toml.j2` bindet je nach Auswahl `pygame-ce>=2.5.0` oder `arcade>=3.0.0` ein.
+- [x] Spielbare Einstiegsdatei `src/main.py.j2` mit Game-Loop, Fensterinitialisierung und Event-Handling für das gewählte Framework.
+- [x] Unit-Tests in `tests/test_game.py.j2` für Basis-Logik und Zustände.
+- [x] Pre-Init (`uv init`, `uv venv`) und Post-Create (`uv sync`) Hooks konfiguriert.
 
 **Verification:**
 
-- [ ] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
-- [ ] Manuelle Prüfung der generierten Vorlagendateien auf Syntax und Jinja2-Bedingungen
+- [x] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
+- [x] Manuelle Prüfung der generierten Vorlagendateien auf Syntax und Jinja2-Bedingungen
 
 **Dependencies:** Keine
 **Files likely touched:**
@@ -39,14 +39,14 @@
 
 **Acceptance criteria:**
 
-- [ ] `templates/python-tui/template.yaml` mit Optionen für GitHub Actions und VS Code.
-- [ ] `pyproject.toml.j2` mit `textual>=0.80.0` und `rich`.
-- [ ] `src/app.py.j2` mit einer lauffähigen Textual-App (Header, Footer, Sidebar, Main Content, Tastaturkürzel).
-- [ ] Unittests mit `textual.pilot` zum automatisierten Testen von TUI-Interaktionen.
+- [x] `templates/python-tui/template.yaml` mit Optionen für GitHub Actions und VS Code.
+- [x] `pyproject.toml.j2` mit `textual>=0.80.0` und `rich`.
+- [x] `src/app.py.j2` mit einer lauffähigen Textual-App (Header, Footer, Sidebar, Main Content, Tastaturkürzel).
+- [x] Unittests mit `textual.pilot` zum automatisierten Testen von TUI-Interaktionen.
 
 **Verification:**
 
-- [ ] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
+- [x] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
 
 **Dependencies:** Keine
 **Files likely touched:**
@@ -68,13 +68,13 @@
 
 **Acceptance criteria:**
 
-- [ ] `_get_recommended_scripts` in `main_window.py` liefert passende Befehle für `python-game` und `python-tui`.
-- [ ] `manifest.yaml` enthält optionale/empfohlene Richtlinie `game_development_guidelines`.
-- [ ] `tests/test_generator.py` prüft, dass `python-game` und `python-tui` geladen werden.
+- [x] `_get_recommended_scripts` in `main_window.py` liefert passende Befehle für `python-game` und `python-tui`.
+- [x] `manifest.yaml` enthält optionale/empfohlene Richtlinie `game_development_guidelines`.
+- [x] `tests/test_generator.py` prüft, dass `python-game` und `python-tui` geladen werden.
 
 **Verification:**
 
-- [ ] Tests pass: `.\.venv\Scripts\python -m unittest discover tests`
+- [x] Tests pass: `.\.venv\Scripts\python -m unittest discover tests`
 
 **Dependencies:** Task 1, Task 2
 **Files likely touched:**
@@ -90,9 +90,9 @@
 
 ## Checkpoint: Python-Spezialisierungen
 
-- [ ] Alle Unittests laufen erfolgreich durch (`Ran X tests ... OK`)
-- [ ] `python-game` und `python-tui` erscheinen in der Template-Liste und generieren sauberen Code
-- [ ] Review mit Entwickler vor Beginn von Phase 2
+- [x] Alle Unittests laufen erfolgreich durch (`Ran X tests ... OK`)
+- [x] `python-game` und `python-tui` erscheinen in der Template-Liste und generieren sauberen Code
+- [x] Review mit Entwickler vor Beginn von Phase 2
 
 ---
 
@@ -104,15 +104,15 @@
 
 **Acceptance criteria:**
 
-- [ ] `templates/web-frontend/template.yaml` mit Select-Option für Framework (`react`, `vue`, `svelte`).
-- [ ] `package.json.j2` mit passenden Skripten (`dev`, `build`, `test`, `lint`) und Abhängigkeiten.
-- [ ] `vite.config.ts.j2`, `tsconfig.json` und Basiskomponenten für das ausgewählte Framework.
-- [ ] CI-Workflow für Typecheck, Lint und Vitest.
-- [ ] Post-Create Hook mit `["npm", "install"]`.
+- [x] `templates/web-frontend/template.yaml` mit Select-Option für Framework (`react`, `vue`, `svelte`).
+- [x] `package.json.j2` mit passenden Skripten (`dev`, `build`, `test`, `lint`) und Abhängigkeiten.
+- [x] `vite.config.ts.j2`, `tsconfig.json` und Basiskomponenten für das ausgewählte Framework.
+- [x] CI-Workflow für Typecheck, Lint und Vitest.
+- [x] Post-Create Hook mit `["npm", "install"]`.
 
 **Verification:**
 
-- [ ] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
+- [x] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
 
 **Dependencies:** Keine
 **Files likely touched:**
@@ -134,14 +134,14 @@
 
 **Acceptance criteria:**
 
-- [ ] `backend/` mit vollwertigem FastAPI-Projekt und `pyproject.toml.j2`.
-- [ ] `frontend/` mit Vite + React + TypeScript und `package.json.j2`.
-- [ ] `docker-compose.yml.j2` verbindet Backend (Port 8000) und Frontend (Port 5173).
-- [ ] Pre-Init und Post-Create Hooks für beide Teilbereiche.
+- [x] `backend/` mit vollwertigem FastAPI-Projekt und `pyproject.toml.j2`.
+- [x] `frontend/` mit Vite + React + TypeScript und `package.json.j2`.
+- [x] `docker-compose.yml.j2` verbindet Backend (Port 8000) und Frontend (Port 5173).
+- [x] Pre-Init und Post-Create Hooks für beide Teilbereiche.
 
 **Verification:**
 
-- [ ] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
+- [x] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
 
 **Dependencies:** Task 4
 **Files likely touched:**
@@ -161,13 +161,13 @@
 
 **Acceptance criteria:**
 
-- [ ] `_get_recommended_scripts` liefert `npm run dev`, `npm run build`, `vitest run` für Web-Templates.
-- [ ] Agenten-Manifest erhält `web_frontend_standards.md` für TypeScript/Vite/React.
-- [ ] Generator-Tests prüfen fehlerfreies Parsen beider Vorlagen.
+- [x] `_get_recommended_scripts` liefert `npm run dev`, `npm run build`, `vitest run` für Web-Templates.
+- [x] Agenten-Manifest erhält `web_frontend_standards.md` für TypeScript/Vite/React.
+- [x] Generator-Tests prüfen fehlerfreies Parsen beider Vorlagen.
 
 **Verification:**
 
-- [ ] Tests pass: `.\.venv\Scripts\python -m unittest discover tests`
+- [x] Tests pass: `.\.venv\Scripts\python -m unittest discover tests`
 
 **Dependencies:** Task 4, Task 5
 **Files likely touched:**
@@ -183,9 +183,9 @@
 
 ## Checkpoint: Web & Fullstack
 
-- [ ] Alle Unittests laufen fehlerfrei durch
-- [ ] Web-Frontend und Fullstack-Templates in CLI und GUI wählbar
-- [ ] Review vor Beginn von Phase 3
+- [x] Alle Unittests laufen fehlerfrei durch
+- [x] Web-Frontend und Fullstack-Templates in CLI und GUI wählbar
+- [x] Review vor Beginn von Phase 3
 
 ---
 
@@ -197,14 +197,14 @@
 
 **Acceptance criteria:**
 
-- [ ] `templates/go-app/template.yaml` mit Framework/Typ-Auswahl (`cli` vs `service`).
-- [ ] `go.mod.j2` mit Modulpfad basierend auf Projektname/GitLab-Namespace.
-- [ ] `main.go.j2` und Paketstruktur mit Unittests (`*_test.go`).
-- [ ] Post-Create Hook: `["go", "mod", "tidy"]`.
+- [x] `templates/go-app/template.yaml` mit Framework/Typ-Auswahl (`cli` vs `service`).
+- [x] `go.mod.j2` mit Modulpfad basierend auf Projektname/GitLab-Namespace.
+- [x] `main.go.j2` und Paketstruktur mit Unittests (`*_test.go`).
+- [x] Post-Create Hook: `["go", "mod", "tidy"]`.
 
 **Verification:**
 
-- [ ] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
+- [x] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
 
 **Dependencies:** Keine
 **Files likely touched:**
@@ -225,15 +225,15 @@
 
 **Acceptance criteria:**
 
-- [ ] `templates/dotnet-app/template.yaml` mit Select-Option für App-Typ (`webapi`, `console`, `avalonia`).
-- [ ] `.csproj.j2` mit Zielframework `net8.0` / `net9.0`.
-- [ ] `Program.cs.j2` mit modernem, idiomatischer C#-Code für den gewählten Typ.
-- [ ] Testprojekt mit xUnit.
-- [ ] Post-Create Hook: `["dotnet", "restore"]`.
+- [x] `templates/dotnet-app/template.yaml` mit Select-Option für App-Typ (`webapi`, `console`, `avalonia`).
+- [x] `.csproj.j2` mit Zielframework `net8.0` / `net9.0`.
+- [x] `Program.cs.j2` mit modernem, idiomatischer C#-Code für den gewählten Typ.
+- [x] Testprojekt mit xUnit.
+- [x] Post-Create Hook: `["dotnet", "restore"]`.
 
 **Verification:**
 
-- [ ] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
+- [x] Tests pass: `.\.venv\Scripts\python -m unittest tests/test_generator.py`
 
 **Dependencies:** Keine
 **Files likely touched:**
@@ -253,14 +253,14 @@
 
 **Acceptance criteria:**
 
-- [ ] `_get_recommended_scripts` unterstützt `go` und `dotnet`.
-- [ ] `manifest.yaml` bindet `go_standards.md` und `csharp_standards.md` ein.
-- [ ] `test_templates_loaded` in `tests/test_generator.py` deckt alle Vorlagen ab.
-- [ ] `README.md` dokumentiert alle neuen Vorlagen mit ihren Optionen.
+- [x] `_get_recommended_scripts` unterstützt `go` und `dotnet`.
+- [x] `manifest.yaml` bindet `go_standards.md` und `csharp_standards.md` ein.
+- [x] `test_templates_loaded` in `tests/test_generator.py` deckt alle Vorlagen ab.
+- [x] `README.md` dokumentiert alle neuen Vorlagen mit ihren Optionen.
 
 **Verification:**
 
-- [ ] Tests pass: `.\.venv\Scripts\python -m unittest discover tests`
+- [x] Tests pass: `.\.venv\Scripts\python -m unittest discover tests`
 
 **Dependencies:** Task 7, Task 8
 **Files likely touched:**
@@ -278,6 +278,6 @@
 
 ## Checkpoint: Gesamtsystem & Release-Bereitschaft
 
-- [ ] Komplette Test-Suite fehlerfrei (`python -m unittest discover tests`)
-- [ ] Alle 12 Vorlagen werden in GUI und CLI einwandfrei erkannt und vorgeschlagen
-- [ ] `git status` sauber, bereit für Implementierung oder Feature-Branches
+- [x] Komplette Test-Suite fehlerfrei (`python -m unittest discover tests`)
+- [x] Alle 12 Vorlagen werden in GUI und CLI einwandfrei erkannt und vorgeschlagen
+- [x] `git status` sauber, bereit für Implementierung oder Feature-Branches
