@@ -39,6 +39,86 @@ elif echo "$FIRST_LINE" | grep -Eq '^(fix|perf)(\([^)]+\))?:'; then
   RECOMMENDED_NAME="Patch"
 fi
 
+# Aktuelle Version ermitteln
+CURRENT_VERSION=""
+if [ -f "pyproject.toml" ]; then
+  CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import re
+try:
+    with open('pyproject.toml', 'r', encoding='utf-8') as f:
+        m = re.search(r'version\s*=\s*["\'](\d+\.\d+\.\d+)["\']', f.read())
+        if m:
+            print(m.group(1))
+except Exception:
+    pass
+EOF
+)
+elif [ -f "package.json" ]; then
+  CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import json
+try:
+    with open('package.json', 'r', encoding='utf-8') as f:
+        print(json.load(f).get('version', ''))
+except Exception:
+    pass
+EOF
+)
+elif [ -f "Cargo.toml" ]; then
+  CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import re
+try:
+    with open('Cargo.toml', 'r', encoding='utf-8') as f:
+        content = f.read()
+        m = re.search(r'(?ms)^\[package\].*?^version\s*=\s*["\'](\d+\.\d+\.\d+)["\']', content)
+        if not m:
+            m = re.search(r'version\s*=\s*["\'](\d+\.\d+\.\d+)["\']', content)
+        if m:
+            print(m.group(1))
+except Exception:
+    pass
+EOF
+)
+fi
+
+if [ -z "$CURRENT_VERSION" ]; then
+  if [ -f "VERSION" ]; then
+    CURRENT_VERSION=$(head -n 1 VERSION 2>/dev/null | tr -d '[:space:]')
+  else
+    LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+    if [ -n "$LATEST_TAG" ]; then
+      CURRENT_VERSION=$(echo "$LATEST_TAG" | sed -e 's/^v//')
+    fi
+  fi
+fi
+CURRENT_VERSION=$(echo "$CURRENT_VERSION" | sed -e 's/^v//')
+
+# Mögliche nächste SemVer-Stufen berechnen
+NEXT_PATCH=""
+NEXT_MINOR=""
+NEXT_MAJOR=""
+if [ -n "$CURRENT_VERSION" ]; then
+  NEXT_VERSIONS=$("$PYTHON_BIN" - "$CURRENT_VERSION" << 'EOF'
+import sys
+try:
+    if len(sys.argv) > 1:
+        v = sys.argv[1].lstrip('v')
+        parts = v.split('.')
+        if len(parts) == 3 and all(p.isdigit() for p in parts):
+            maj, min_, pat = map(int, parts)
+            print(f"{maj}.{min_}.{pat+1}")
+            print(f"{maj}.{min_+1}.0")
+            print(f"{maj+1}.0.0")
+except Exception:
+    pass
+EOF
+)
+  if [ -n "$NEXT_VERSIONS" ]; then
+    NEXT_PATCH=$(echo "$NEXT_VERSIONS" | sed -n '1p')
+    NEXT_MINOR=$(echo "$NEXT_VERSIONS" | sed -n '2p')
+    NEXT_MAJOR=$(echo "$NEXT_VERSIONS" | sed -n '3p')
+  fi
+fi
+
 # Interaktivitätsprüfung: TTY verfügbar und kein automatisierter/übersprungener Modus
 INTERACTIVE=0
 if [ -z "$CI" ] && [ "${GIT_HOOKS_NON_INTERACTIVE:-0}" != "1" ] && [ "${GIT_HOOKS_SKIP_BUMP:-0}" != "1" ]; then
@@ -53,85 +133,96 @@ if [ -z "$CI" ] && [ "${GIT_HOOKS_NON_INTERACTIVE:-0}" != "1" ] && [ "${GIT_HOOK
   fi
 fi
 
-if [ "$INTERACTIVE" = "1" ]; then
-  # Aktuelle Version ermitteln
-  CURRENT_VERSION=""
-  if [ -f "pyproject.toml" ]; then
-    CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
-import re
-try:
-    with open('pyproject.toml', 'r', encoding='utf-8') as f:
-        m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', f.read())
-        if m:
-            print(m.group(1))
-except Exception:
-    pass
-EOF
-)
-  elif [ -f "package.json" ]; then
-    CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
-import json
-try:
-    with open('package.json', 'r', encoding='utf-8') as f:
-        print(json.load(f).get('version', ''))
-except Exception:
-    pass
-EOF
-)
-  elif [ -f "Cargo.toml" ]; then
-    CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
-import re
-try:
-    with open('Cargo.toml', 'r', encoding='utf-8') as f:
-        content = f.read()
-        m = re.search(r'(?ms)^\[package\].*?^version\s*=\s*"(\d+\.\d+\.\d+)"', content)
-        if not m:
-            m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', content)
-        if m:
-            print(m.group(1))
-except Exception:
-    pass
-EOF
-)
-  fi
+NEW_VERSION=""
 
+if [ "$INTERACTIVE" = "1" ]; then
   echo "----------------------------------------"
-  if [ -n "$CURRENT_VERSION" ]; then
-    echo "Aktuelle Version: v$CURRENT_VERSION"
-  fi
   if [ -n "$FIRST_LINE" ]; then
     echo "Commit: $FIRST_LINE"
   fi
   echo "Empfohlener Bump: $RECOMMENDED_NAME ($DEFAULT_CHOICE)"
   echo "----------------------------------------"
+  if [ -n "$CURRENT_VERSION" ]; then
+    echo "Aktuelle SemVer: v$CURRENT_VERSION"
+  fi
   echo "SemVer Bump auswählen:"
-  echo "1) Patch"
-  echo "2) Minor"
-  echo "3) Major"
-  echo "s) Überspringen (keine Änderung)"
+  if [ -n "$NEXT_PATCH" ]; then
+    echo "1) Patch (v$CURRENT_VERSION -> v$NEXT_PATCH)"
+    echo "2) Minor (v$CURRENT_VERSION -> v$NEXT_MINOR)"
+    echo "3) Major (v$CURRENT_VERSION -> v$NEXT_MAJOR)"
+    echo "s) Überspringen (keine Änderung, bleibt v$CURRENT_VERSION)"
+  else
+    echo "1) Patch"
+    echo "2) Minor"
+    echo "3) Major"
+    echo "s) Überspringen (keine Änderung)"
+  fi
   echo "----------------------------------------"
   read -r -p "Auswahl [1/2/3/s] (Standard: $DEFAULT_CHOICE): " choice || choice="$DEFAULT_CHOICE"
   [ -z "$choice" ] && choice="$DEFAULT_CHOICE"
 
   case "$choice" in
-    1) BUMP="patch" ;;
-    2) BUMP="minor" ;;
-    3) BUMP="major" ;;
-    s|S|"") echo "Version unverändert gelassen." ;;
-    *) echo "Ungültige Auswahl, Version unverändert gelassen." ;;
+    1)
+      BUMP="patch"
+      NEW_VERSION="$NEXT_PATCH"
+      ;;
+    2)
+      BUMP="minor"
+      NEW_VERSION="$NEXT_MINOR"
+      ;;
+    3)
+      BUMP="major"
+      NEW_VERSION="$NEXT_MAJOR"
+      ;;
+    s|S|"")
+      BUMP=""
+      NEW_VERSION="$CURRENT_VERSION"
+      ;;
+    *)
+      BUMP=""
+      NEW_VERSION="$CURRENT_VERSION"
+      echo "Ungültige Auswahl, Version unverändert gelassen."
+      ;;
   esac
+
+  if [ -n "$BUMP" ]; then
+    if [ -n "$NEW_VERSION" ]; then
+      echo "SemVer danach: v$NEW_VERSION"
+    fi
+  else
+    if [ -n "$NEW_VERSION" ]; then
+      echo "SemVer danach: v$NEW_VERSION (unverändert)"
+    else
+      echo "Version unverändert gelassen."
+    fi
+  fi
 else
   # Nicht-interaktiver Modus (z. B. VS Code GUI, Windows-Konsole ohne TTY, automatisierte Tools)
   # Automatischer SemVer-Bump basierend auf Conventional Commits
   if [ "${GIT_HOOKS_SKIP_BUMP:-0}" != "1" ]; then
     case "$DEFAULT_CHOICE" in
-      1) BUMP="patch" ;;
-      2) BUMP="minor" ;;
-      3) BUMP="major" ;;
-      *) BUMP="" ;;
+      1)
+        BUMP="patch"
+        NEW_VERSION="$NEXT_PATCH"
+        ;;
+      2)
+        BUMP="minor"
+        NEW_VERSION="$NEXT_MINOR"
+        ;;
+      3)
+        BUMP="major"
+        NEW_VERSION="$NEXT_MAJOR"
+        ;;
+      *)
+        BUMP=""
+        NEW_VERSION="$CURRENT_VERSION"
+        ;;
     esac
     if [ -n "$BUMP" ]; then
       echo "Automatischer SemVer Bump ($BUMP) basierend auf Commit: $FIRST_LINE"
+      if [ -n "$NEW_VERSION" ]; then
+        echo "SemVer danach: v$NEW_VERSION"
+      fi
     fi
   fi
 fi
@@ -424,13 +515,13 @@ fi
 # -----------------------------------------------------------------------------
 AUTO_TAG=$(git config --bool hooks.autotag 2>/dev/null || echo "false")
 if [ "$AUTO_TAG" = "true" ] && [ -n "$BUMP" ]; then
-  NEW_VERSION=""
+  TAG_VERSION=""
   if [ -f "pyproject.toml" ]; then
-    NEW_VERSION=$("$PYTHON_BIN" - << 'EOF'
+    TAG_VERSION=$("$PYTHON_BIN" - << 'EOF'
 import re
 try:
     with open('pyproject.toml', 'r', encoding='utf-8') as f:
-        m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', f.read())
+        m = re.search(r'version\s*=\s*["\'](\d+\.\d+\.\d+)["\']', f.read())
         if m:
             print(m.group(1))
 except Exception:
@@ -438,7 +529,7 @@ except Exception:
 EOF
 )
   elif [ -f "package.json" ]; then
-    NEW_VERSION=$("$PYTHON_BIN" - << 'EOF'
+    TAG_VERSION=$("$PYTHON_BIN" - << 'EOF'
 import json
 try:
     with open('package.json', 'r', encoding='utf-8') as f:
@@ -448,14 +539,14 @@ except Exception:
 EOF
 )
   elif [ -f "Cargo.toml" ]; then
-    NEW_VERSION=$("$PYTHON_BIN" - << 'EOF'
+    TAG_VERSION=$("$PYTHON_BIN" - << 'EOF'
 import re
 try:
     with open('Cargo.toml', 'r', encoding='utf-8') as f:
         content = f.read()
-        m = re.search(r'(?ms)^\[package\].*?^version\s*=\s*"(\d+\.\d+\.\d+)"', content)
+        m = re.search(r'(?ms)^\[package\].*?^version\s*=\s*["\'](\d+\.\d+\.\d+)["\']', content)
         if not m:
-            m = re.search(r'version\s*=\s*"(\d+\.\d+\.\d+)"', content)
+            m = re.search(r'version\s*=\s*["\'](\d+\.\d+\.\d+)["\']', content)
         if m:
             print(m.group(1))
 except Exception:
@@ -464,8 +555,12 @@ EOF
 )
   fi
 
-  if [ -n "$NEW_VERSION" ]; then
-    TAG_NAME="v$NEW_VERSION"
+  if [ -z "$TAG_VERSION" ] && [ -n "$NEW_VERSION" ]; then
+    TAG_VERSION="$NEW_VERSION"
+  fi
+
+  if [ -n "$TAG_VERSION" ]; then
+    TAG_NAME="v$TAG_VERSION"
     git tag -a "$TAG_NAME" -m "Release $TAG_NAME" -f
     echo "✔ Git-Tag '$TAG_NAME' auf aktuellen Commit gesetzt."
 

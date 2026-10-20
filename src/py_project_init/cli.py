@@ -11,12 +11,12 @@ def run_cli(args: list[str] | None = None) -> int:
     if sys.stdout and hasattr(sys.stdout, "reconfigure"):
         try:
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-        except AttributeError, OSError:
+        except (AttributeError, OSError):
             pass
     if sys.stderr and hasattr(sys.stderr, "reconfigure"):
         try:
             sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-        except AttributeError, OSError:
+        except (AttributeError, OSError):
             pass
 
     # If no arguments provided or explicitly requested --gui, signal to launch GUI

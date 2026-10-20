@@ -285,7 +285,9 @@ class TestGitHooks(unittest.TestCase):
                 input="2\n",
                 env=env,
                 capture_output=True,
-                text=True
+                text=True,
+                encoding="utf-8",
+                errors="replace"
             )
             self.assertEqual(res.returncode, 0, f"Commit failed: {res.stderr}")
 
@@ -297,7 +299,9 @@ class TestGitHooks(unittest.TestCase):
             head_pyproject = subprocess.check_output(
                 ["git", "show", "HEAD:pyproject.toml"],
                 cwd=proj,
-                text=True
+                text=True,
+                encoding="utf-8",
+                errors="replace"
             )
             self.assertIn('version = "1.1.0"', head_pyproject)
 
@@ -316,6 +320,56 @@ class TestGitHooks(unittest.TestCase):
             # Verify push.followTags was set
             follow_tags = subprocess.check_output(["git", "config", "--get", "push.followTags"], cwd=proj, text=True).strip()
             self.assertEqual(follow_tags, "true")
+
+            # Verify interactive SemVer outputs
+            combined_output = res.stdout + res.stderr
+            self.assertIn("Aktuelle SemVer: v1.0.0", combined_output)
+            self.assertIn("SemVer danach: v1.1.0", combined_output)
+
+    def test_post_commit_interactive_skip(self):
+        """Verifies that selecting skip ('s') interactively preserves version and outputs unchanged SemVer."""
+        import shutil
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+
+            hooks_dir = proj / ".git" / "hooks"
+            shutil.copy2(self.hooks_dir / "pre-commit", hooks_dir / "pre-commit")
+            shutil.copy2(self.hooks_dir / "commit-msg", hooks_dir / "commit-msg")
+            shutil.copy2(self.hooks_dir / "post-commit", hooks_dir / "post-commit")
+
+            pyproject = proj / "pyproject.toml"
+            pyproject.write_text('[project]\nname = "test"\nversion = "1.0.0"\n', encoding="utf-8")
+            (proj / "app.py").write_text("print('hello')", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+
+            env = os.environ.copy()
+            env["GIT_HOOKS_FORCE_INTERACTIVE"] = "1"
+            env.pop("GIT_HOOKS_NON_INTERACTIVE", None)
+            env.pop("CI", None)
+
+            res = subprocess.run(
+                ["git", "commit", "-m", "chore: minor cleanups"],
+                cwd=proj,
+                input="s\n",
+                env=env,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertEqual(res.returncode, 0, f"Commit failed: {res.stderr}")
+
+            # Verify current SemVer output before query and unchanged SemVer output afterwards
+            combined_output = res.stdout + res.stderr
+            self.assertIn("Aktuelle SemVer: v1.0.0", combined_output)
+            self.assertIn("SemVer danach: v1.0.0 (unverändert)", combined_output)
+
+            # Version remains unchanged
+            content = pyproject.read_text(encoding="utf-8")
+            self.assertIn('version = "1.0.0"', content)
 
     def test_post_commit_auto_bump_typescript(self):
         """Verifies that non-interactive commit in a Node/TS project bumps package.json according to Conventional Commits."""
