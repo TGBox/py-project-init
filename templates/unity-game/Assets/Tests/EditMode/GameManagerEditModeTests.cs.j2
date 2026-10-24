@@ -1,0 +1,30 @@
+using NUnit.Framework;
+using UnityEngine;
+using {{ project_name | replace('-', '_') }}.Core;
+
+namespace {{ project_name | replace('-', '_') }}.Tests.EditMode
+{
+    public class GameManagerEditModeTests
+    {
+        [Test]
+        public void GameManager_StateEnum_ContainsExpectedValues()
+        {
+            Assert.AreEqual(0, (int)GameManager.GameState.Boot);
+            Assert.AreEqual(1, (int)GameManager.GameState.MainMenu);
+            Assert.AreEqual(2, (int)GameManager.GameState.Playing);
+            Assert.AreEqual(3, (int)GameManager.GameState.Paused);
+            Assert.AreEqual(4, (int)GameManager.GameState.GameOver);
+        }
+
+        [Test]
+        public void ScreenModeController_CanBeInstantiated()
+        {
+            GameObject testObject = new GameObject("TestScreenMode");
+            ScreenModeController controller = testObject.AddComponent<ScreenModeController>();
+
+            Assert.IsNotNull(controller);
+
+            Object.DestroyImmediate(testObject);
+        }
+    }
+}

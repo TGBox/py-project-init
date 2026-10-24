@@ -49,4 +49,18 @@ elif [ -f "package.json" ]; then
             exit 1
         }
     fi
+elif [ -f "ProjectSettings/ProjectVersion.txt" ]; then
+    if command -v Unity >/dev/null 2>&1; then
+        echo "Führe Unity Test Runner vor dem Push aus..."
+        Unity -batchmode -runTests -projectPath . -testPlatform PlayMode -testResults tests/results.xml || {
+            echo "FEHLER: Unity Tests vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+            exit 1
+        }
+    fi
+elif ([ -f "*.sln" ] || compgen -G "*.sln" >/dev/null 2>&1 || compgen -G "*/*.csproj" >/dev/null 2>&1) && command -v dotnet >/dev/null 2>&1; then
+    echo "Führe dotnet test vor dem Push aus..."
+    dotnet test -q || {
+        echo "FEHLER: dotnet test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+        exit 1
+    }
 fi

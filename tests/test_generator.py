@@ -27,6 +27,7 @@ class TestTemplateManager(unittest.TestCase):
         self.assertIn("rust-cli", self.manager.templates)
         self.assertIn("rust-gui", self.manager.templates)
         self.assertIn("node-ts", self.manager.templates)
+        self.assertIn("unity-game", self.manager.templates)
 
     def test_get_available_hooks(self):
         """Ensures hooks are discovered with metadata."""
@@ -79,6 +80,11 @@ class TestTemplateManager(unittest.TestCase):
         # .NET C# recommendations
         dotnet_rec = self.manager.get_recommended_agent_configs("dotnet-app", "C#")
         self.assertIn("csharp_standards", dotnet_rec["rules"])
+
+        # Unity C# recommendations
+        unity_rec = self.manager.get_recommended_agent_configs("unity-game", "C#")
+        self.assertIn("unity_csharp_standards", unity_rec["rules"])
+        self.assertIn("unity-meta-checker", unity_rec["skills"])
 
     def test_merge_gitignore(self):
         """Verifies intelligent merging of gitignore without duplicates."""
@@ -464,6 +470,58 @@ class TestTemplateManager(unittest.TestCase):
         )
         self.assertIn("Dockerfile", dotnet_files)
 
+    def test_preview_unity_game(self):
+        """Verifies template rendering and preview for unity-game."""
+        ctx = {
+            "project_name": "AetherForge",
+            "project_slug": "aether_forge",
+            "unity_version": "6000.0",
+            "render_pipeline": "urp",
+            "dimension": "3d",
+            "new_input_system": True,
+            "test_framework": True,
+            "github_actions": True,
+            "vscode": True,
+            "enable_git_hooks": True,
+            "selected_git_hooks": ["pre-commit", "commit-msg", "post-commit"],
+            "enable_agent_configs": True,
+            "selected_agent_rules": ["unity_csharp_standards"],
+            "selected_agent_skills": ["unity-meta-checker"],
+        }
+        files = self.manager.preview("unity-game", ctx)
+        self.assertIn("Assets/Scripts/AetherForge.asmdef", files)
+        self.assertIn("Assets/Scripts/AetherForge.asmdef.meta", files)
+        self.assertIn("Assets/Scripts/Core/GameManager.cs", files)
+        self.assertIn("Assets/Scripts/Core/GameManager.cs.meta", files)
+        self.assertIn("Assets/Scripts/Core/ScreenModeController.cs", files)
+        self.assertIn("Assets/Scripts/Core/ScreenModeController.cs.meta", files)
+        self.assertIn("Assets/Scripts/Gameplay/PlayerController.cs", files)
+        self.assertIn("Assets/Scripts/Gameplay/PlayerController.cs.meta", files)
+        self.assertIn("Assets/Scenes/MainScene.unity", files)
+        self.assertIn("Assets/Scenes/MainScene.unity.meta", files)
+        self.assertIn("Assets/Tests/AetherForge.Tests.asmdef", files)
+        self.assertIn("Assets/Tests/AetherForge.Tests.asmdef.meta", files)
+        self.assertIn("Assets/Tests/EditMode/GameManagerEditModeTests.cs", files)
+        self.assertIn("Assets/Tests/EditMode/GameManagerEditModeTests.cs.meta", files)
+        self.assertIn("Assets/Tests/PlayMode/GameManagerPlayModeTests.cs", files)
+        self.assertIn("Assets/Tests/PlayMode/GameManagerPlayModeTests.cs.meta", files)
+        self.assertIn("ProjectSettings/ProjectVersion.txt", files)
+        self.assertIn("ProjectSettings/ProjectSettings.asset", files)
+        self.assertIn("ProjectSettings/EditorSettings.asset", files)
+        self.assertIn("Packages/manifest.json", files)
+        self.assertIn(".gitignore", files)
+        self.assertIn(".gitattributes", files)
+        self.assertIn(".agents/rules/unity_csharp_standards.md", files)
+        self.assertIn(".agents/skills/unity-meta-checker/SKILL.md", files)
+        self.assertIn(".github/workflows/unity-ci.yml", files)
+        self.assertIn(".vscode/extensions.json", files)
+        self.assertIn(".vscode/settings.json", files)
+        self.assertIn("6000.0", files["ProjectSettings/ProjectVersion.txt"]["content"])
+        self.assertIn("AetherForge", files["ProjectSettings/ProjectSettings.asset"]["content"])
+        self.assertIn("ScreenModeController", files["Assets/Scripts/Core/ScreenModeController.cs"]["content"])
+        self.assertIn("KeyCode.F11", files["Assets/Scripts/Core/ScreenModeController.cs"]["content"])
+        self.assertIn("com.unity.inputsystem", files["Packages/manifest.json"]["content"])
+
     def test_retrofit_functionality(self):
         """Verifies retrofitting hooks and agent configs into an existing project."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -747,6 +805,8 @@ class TestTemplateManager(unittest.TestCase):
             ("rust-cli", {}),
             ("rust-gui", {"framework": "egui"}),
             ("node-ts", {}),
+            ("unity-game", {"unity_version": "6000.0", "render_pipeline": "urp", "dimension": "3d"}),
+            ("unity-game", {"unity_version": "2022.3", "render_pipeline": "builtin", "dimension": "2d"}),
         ]
 
         for t_id, extra_ctx in variants:

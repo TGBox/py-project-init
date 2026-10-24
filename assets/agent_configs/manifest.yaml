@@ -75,6 +75,14 @@ rules:
     templates: ["dotnet-app"]
     default: true
 
+  - id: "unity_csharp_standards"
+    name: "Unity & C# Game Development Richtlinien"
+    description: "Unity Engine Best Practices: Assembly Definitions (.asmdef), MonoBehaviour-Entkopplung, GC-Vermeidung, Fenster- & Vollbildmodus (F11) und .meta-Dateien-Integrität."
+    file: "rules/unity_csharp_standards.md"
+    languages: ["C#"]
+    templates: ["unity-game"]
+    default: true
+
 skills:
   - id: "code-review"
     name: "Code-Review Skill"
@@ -85,7 +93,15 @@ skills:
 
   - id: "test-runner"
     name: "Test-Runner & Diagnose Skill"
-    description: "Automatisiertes Ausführen und Analysieren von Tests mit den passenden Werkzeugen des Projekts (pytest, cargo test, vitest)."
+    description: "Automatisiertes Ausführen und Analysieren von Tests mit den passenden Werkzeugen des Projekts (pytest, cargo test, vitest, unity)."
     folder: "skills/test-runner"
     languages: ["all"]
+    default: true
+
+  - id: "unity-meta-checker"
+    name: "Unity Meta-File & Asset Checker"
+    description: "Prüft Unity-Projekte auf fehlende oder verwaiste .meta-Dateien, GUID-Integrität und Assembly-Definitionen."
+    folder: "skills/unity-meta-checker"
+    languages: ["C#"]
+    templates: ["unity-game"]
     default: true

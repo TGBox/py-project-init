@@ -1,0 +1,85 @@
+using UnityEngine;
+
+namespace {{ project_name | replace('-', '_') }}.Core
+{
+    /// <summary>
+    /// Manages windowed and fullscreen display modes.
+    /// Provides keyboard toggling via F11 or Alt+Enter and persists window preferences.
+    /// Adheres to UI standards requiring both windowed and fullscreen support.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public class ScreenModeController : MonoBehaviour
+    {
+        [Header("Display Settings")]
+        [SerializeField] private int defaultWindowedWidth = 1280;
+        [SerializeField] private int defaultWindowedHeight = 720;
+        [SerializeField] private bool startInFullscreen = false;
+
+        private int savedWindowWidth;
+        private int savedWindowHeight;
+
+        public bool IsFullscreen => Screen.fullScreen;
+
+        private void Awake()
+        {
+            savedWindowWidth = defaultWindowedWidth;
+            savedWindowHeight = defaultWindowedHeight;
+
+            if (startInFullscreen)
+            {
+                SetFullscreenMode();
+            }
+            else
+            {
+                SetWindowedMode(savedWindowWidth, savedWindowHeight);
+            }
+        }
+
+        private void Update()
+        {
+            // F11 or Alt + Enter toggles between fullscreen and windowed mode
+            if (Input.GetKeyDown(KeyCode.F11) ||
+                ((Input.GetKey(KeyCode.LeftAlt) || Input.GetKey(KeyCode.RightAlt)) && Input.GetKeyDown(KeyCode.Return)))
+            {
+                ToggleScreenMode();
+            }
+        }
+
+        /// <summary>
+        /// Toggles between fullscreen and windowed modes.
+        /// </summary>
+        public void ToggleScreenMode()
+        {
+            if (Screen.fullScreen)
+            {
+                SetWindowedMode(savedWindowWidth, savedWindowHeight);
+            }
+            else
+            {
+                // Save current resolution before switching to fullscreen
+                savedWindowWidth = Screen.width > 0 ? Screen.width : defaultWindowedWidth;
+                savedWindowHeight = Screen.height > 0 ? Screen.height : defaultWindowedHeight;
+                SetFullscreenMode();
+            }
+        }
+
+        /// <summary>
+        /// Switches to fullscreen mode.
+        /// </summary>
+        public void SetFullscreenMode()
+        {
+            Resolution maxRes = Screen.currentResolution;
+            Screen.SetResolution(maxRes.width, maxRes.height, FullScreenMode.FullScreenWindow);
+        }
+
+        /// <summary>
+        /// Switches to windowed mode with the specified dimensions.
+        /// </summary>
+        public void SetWindowedMode(int width, int height)
+        {
+            savedWindowWidth = Mathf.Max(640, width);
+            savedWindowHeight = Mathf.Max(480, height);
+            Screen.SetResolution(savedWindowWidth, savedWindowHeight, FullScreenMode.Windowed);
+        }
+    }
+}

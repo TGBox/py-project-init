@@ -924,6 +924,12 @@ class MainWindow(QMainWindow):
                 "format": "go fmt ./...",
                 "lint": "golangci-lint run",
             }
+        elif "unity" in t_id:
+            return {
+                "editor": "Unity -projectPath .",
+                "test": "Unity -batchmode -runTests -projectPath . -testPlatform PlayMode -testResults tests/results.xml",
+                "build": "Unity -batchmode -quit -projectPath . -buildWindows64Player Build/Game.exe",
+            }
         elif "dotnet" in t_id or "c#" in lang or "csharp" in lang:
             return {
                 "main": "dotnet run",

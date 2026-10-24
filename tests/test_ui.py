@@ -109,6 +109,13 @@ class TestMainWindow(unittest.TestCase):
             self.assertEqual(dotnet_scripts.get("main"), "dotnet run")
             self.assertEqual(dotnet_scripts.get("test"), "dotnet test")
 
+        idx_unity = self.window.template_combo.findData("unity-game")
+        if idx_unity >= 0:
+            self.window.template_combo.setCurrentIndex(idx_unity)
+            unity_scripts = self.window._get_custom_scripts_dict()
+            self.assertEqual(unity_scripts.get("editor"), "Unity -projectPath .")
+            self.assertIn("Unity -batchmode", unity_scripts.get("test"))
+
     def test_preview_dialog(self):
         """Tests that PreviewDialog loads files and displays content on selection and clicks."""
         # 1. Test dict format as produced by generator.preview()

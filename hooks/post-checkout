@@ -36,5 +36,10 @@ if [ "$IS_BRANCH_CHECKOUT" = "1" ]; then
                 cargo check
             fi
         fi
+
+        if echo "$DIFF_FILES" | grep -q "Packages/manifest.json"; then
+            echo "Packages/manifest.json wurde aktualisiert – Unity Packages haben sich geändert."
+            echo "Bitte Unity Editor in den Vordergrund bringen, um Packages neu zu importieren."
+        fi
     fi
 fi

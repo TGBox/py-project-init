@@ -1,0 +1,44 @@
+name: Unity CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Run Unity Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: Library
+          key: {% raw %}Library-${{ runner.os }}-${{ hashFiles('Packages/manifest.json') }}{% endraw %}
+          restore-keys: |
+            {% raw %}Library-${{ runner.os }}-{% endraw %}
+
+      - name: Run EditMode and PlayMode Tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: {% raw %}${{ secrets.UNITY_LICENSE }}{% endraw %}
+          UNITY_EMAIL: {% raw %}${{ secrets.UNITY_EMAIL }}{% endraw %}
+          UNITY_PASSWORD: {% raw %}${{ secrets.UNITY_PASSWORD }}{% endraw %}
+        with:
+          projectPath: .
+          testMode: all
+          artifactsPath: test-artifacts
+          githubToken: {% raw %}${{ secrets.GITHUB_TOKEN }}{% endraw %}
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Test results
+          path: test-artifacts

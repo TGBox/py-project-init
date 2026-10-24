@@ -1,0 +1,32 @@
+using System.Collections;
+using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
+using {{ project_name | replace('-', '_') }}.Core;
+
+namespace {{ project_name | replace('-', '_') }}.Tests.PlayMode
+{
+    public class GameManagerPlayModeTests
+    {
+        [UnityTest]
+        public IEnumerator GameManager_StateTransitions_TriggerCorrectly()
+        {
+            GameObject go = new GameObject("TestGameManager");
+            GameManager manager = go.AddComponent<GameManager>();
+
+            yield return null;
+
+            Assert.AreEqual(GameManager.GameState.Playing, manager.CurrentState);
+
+            manager.SetState(GameManager.GameState.Paused);
+            Assert.AreEqual(GameManager.GameState.Paused, manager.CurrentState);
+            Assert.AreEqual(0.0f, Time.timeScale);
+
+            manager.SetState(GameManager.GameState.Playing);
+            Assert.AreEqual(GameManager.GameState.Playing, manager.CurrentState);
+            Assert.AreEqual(1.0f, Time.timeScale);
+
+            Object.Destroy(go);
+        }
+    }
+}

@@ -78,6 +78,18 @@ except Exception:
     pass
 EOF
 )
+elif [ -f "ProjectSettings/ProjectSettings.asset" ]; then
+  CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import re
+try:
+    with open('ProjectSettings/ProjectSettings.asset', 'r', encoding='utf-8') as f:
+        m = re.search(r'bundleVersion:\s*["\']?(\d+\.\d+\.\d+)["\']?', f.read())
+        if m:
+            print(m.group(1))
+except Exception:
+    pass
+EOF
+)
 fi
 
 if [ -z "$CURRENT_VERSION" ]; then
@@ -383,6 +395,43 @@ if m:
       git add Cargo.lock
       echo "Cargo.lock aktualisiert und gestaged."
     fi
+  fi
+
+  # ---------------------------------------------------------------------------
+  # Unity-Projekt (ProjectSettings/ProjectSettings.asset)
+  # ---------------------------------------------------------------------------
+  if [ -f "ProjectSettings/ProjectSettings.asset" ]; then
+    "$PYTHON_BIN" -c "
+import re
+
+part = '$BUMP'
+file = 'ProjectSettings/ProjectSettings.asset'
+
+with open(file, 'r', encoding='utf-8') as f:
+    content = f.read()
+
+m = re.search(r'(bundleVersion:\s*[\"\']?)(\d+)\.(\d+)\.(\d+)([\"\']?)', content)
+if m:
+    major, minor, patch = int(m.group(2)), int(m.group(3)), int(m.group(4))
+    if part == 'major':
+        major += 1
+        minor = 0
+        patch = 0
+    elif part == 'minor':
+        minor += 1
+        patch = 0
+    elif part == 'patch':
+        patch += 1
+
+    new_ver = f'{major}.{minor}.{patch}'
+    content = content[:m.start()] + f'{m.group(1)}{new_ver}{m.group(5)}' + content[m.end():]
+
+    with open(file, 'w', encoding='utf-8') as f:
+        f.write(content)
+
+    print(f'ProjectSettings.asset: {m.group(2)}.{m.group(3)}.{m.group(4)} -> {new_ver}')
+"
+    git add ProjectSettings/ProjectSettings.asset
   fi
 fi
 

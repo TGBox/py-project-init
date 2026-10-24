@@ -39,18 +39,18 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
   - Sauberes Überschreiben von Dummy-Dateien durch die Jinja2-Vorlagen.
 - **Modulare Git-Hooks Integration (8 clientseitige Hooks):**
   - Feingranulare Auswahl in der UI für verfügbare Hooks aus dem Ordner `hooks/`:
-    - **`pre-commit` (SemVer-Bump & Secret-Scanner):** Blockiert versehentlich gestagte Secrets (`.env`, Private Keys), Dateien >10MB und fragt interaktiv nach SemVer-Bumps.
+    - **`pre-commit` (Secret-, Size- & Meta-Scanner):** Blockiert versehentlich gestagte Secrets (`.env`, Private Keys), Dateien >10MB und prüft Unity `.meta`-Dateien-Integrität.
     - **`commit-msg` (Conventional Commits Linter):** Erzwingt standardisierte Commit-Nachrichten (`feat:`, `fix:`, `chore:`, `docs:`, etc.) mit Mindestlänge.
     - **`prepare-commit-msg` (Ticket-ID aus Branch):** Liest Ticket-Schlüssel aus Branch-Namen (z. B. `feature/PROJ-123` → `[PROJ-123]`) und stellt sie der Commit-Nachricht voran.
-    - **`post-commit` (Changelog-Generator):** Generiert und aktualisiert automatisch eine linter-konforme `CHANGELOG.md` basierend auf Commits.
-    - **`post-checkout` (Dependency-Sync & Branch-Check):** Führt `uv sync` oder `npm install` aus, wenn Lockfiles geändert wurden, und warnt vor direkter Arbeit auf `main`.
-    - **`post-merge` (Lockfile-Sync & .env-Vergleich):** Synchronisiert Abhängigkeiten nach Merges/Pulls und warnt vor fehlenden Variablen aus `.env.example`.
+    - **`post-commit` (SemVer-Bump & Changelog-Generator):** Fragt nach SemVer-Bumps (Python, Node, Rust, Unity), pflegt `CHANGELOG.md` per Amend und setzt Git-Tags.
+    - **`post-checkout` (Dependency-Sync & Branch-Check):** Führt `uv sync` oder `npm install` aus, meldet geänderte Unity Packages (`manifest.json`) und warnt vor direkter Arbeit auf `main`.
+    - **`post-merge` (Lockfile-Sync & .env-Vergleich):** Synchronisiert Abhängigkeiten nach Merges/Pulls, meldet Unity Package-Updates und warnt vor fehlenden Variablen aus `.env.example`.
     - **`pre-rebase` (Historien-Schutz):** Blockiert versehentliches Rebasen der Haupt-Branches (`main`/`master`).
-    - **`pre-push` (Branch-Schutz & Test-Gate):** Blockiert direkte Pushes auf `main`/`master` und führt vor dem Push die Test-Suite aus.
+    - **`pre-push` (Branch-Schutz & Test-Gate):** Blockiert direkte Pushes auf `main`/`master` und führt vor dem Push die Test-Suite aus (pytest, cargo, vitest, dotnet, unity).
   - Automatischer initialer Commit während der Generierung via `--no-verify`.
 - **Agenten-Regeln & Skills (.agents/):**
   - Modulare Bibliothek unter `assets/agent_configs/` für Coding-Assistenten.
-  - Automatische, sprach- und vorlagenspezifische Empfehlungen für Regeln und Skills.
+  - Automatische, sprach- und vorlagenspezifische Empfehlungen für Regeln und Skills (z. B. `unity_csharp_standards` und `unity-meta-checker`).
   - Individuelle An- und Abwahl in der Benutzeroberfläche.
   - Generiert `.agents/rules/`, `.agents/skills/` sowie eine strukturierte `AGENTS.md` im Projektstamm.
 - **Erweiterte Metadaten & Benutzerdefinierte Skripte:**
@@ -76,6 +76,7 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
 | **Rust GUI** | Rust (Desktop GUI) | Auswahl des GUI-Frameworks (**egui / eframe**, **Iced**, **Tauri**, **Slint**, **GTK4**) mit detaillierten Tooltips |
 | **Go Anwendung** | Go (Go 1.23+) | Go Modules (`go.mod`), Architekturtyp (**CLI-Tool** mit Flags oder **REST API Service** mit `go-chi/chi`), Unit-Tests, optionale GitHub Actions CI & Multi-Stage Distroless Dockerfile |
 | **.NET C# Anwendung** | C# (.NET 8 / 9) | Moderner .NET-Stack, Projekttyp (**Web API / Minimal API**, **CLI-Konsole** oder **Avalonia XAML Desktop UI** mit Vollbildmodus), xUnit-Tests, optionale GitHub Actions CI & Multi-Stage Dockerfile |
+| **Unity C# Game** | C# (Unity Engine) | Saubere Projektstruktur, Unity 6 (LTS) oder 2022.3 LTS, URP oder Built-in, 2D/3D, GameManager, Fenster- & Vollbildmodus (`F11`), Input System, EditMode/PlayMode Tests, Git LFS & `.meta`-Prüfung, optionale GitHub Actions CI |
 | **Node/TypeScript** | TypeScript (npm / Node.js) | Modernes TS-Setup, Vitest, optionale GitHub Actions CI & Dockerfile |
 
 ---

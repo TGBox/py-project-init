@@ -1,0 +1,98 @@
+# {{ project_name }}
+
+{{ project_description if project_description else "Ein modernes Unity-Spielprojekt mit C#, modularer Assembly-Architektur und Test-Setup." }}
+
+---
+
+## 🎮 Projektübersicht
+
+- **Engine:** Unity {% if unity_version == '2022.3' %}2022.3 LTS (2022.3.50f1){% else %}6 (LTS / 6000.0.38f1){% endif %}
+- **Programmiersprache:** C# (.NET Standard 2.1 / C# 9.0+)
+- **Render-Pipeline:** {% if render_pipeline == 'urp' %}Universal Render Pipeline (URP){% else %}Built-in Render Pipeline{% endif %}
+- **Projekt-Modus:** {{ dimension | upper }}
+- **Input System:** {% if new_input_system %}Modernes Unity Input System (`com.unity.inputsystem`){% else %}Klassisches Input-Modul{% endif %}
+
+---
+
+## 🚀 Schnellstart
+
+### 1. In Unity Hub öffnen
+
+1. Öffne den **Unity Hub**.
+2. Klicke oben rechts auf **Add** (Projekt hinzufügen) und wähle diesen Ordner (`{{ project_name }}`) aus.
+3. Wähle als Editor-Version: `{% if unity_version == '2022.3' %}2022.3.50f1{% else %}6000.0.38f1{% endif %}` (wird automatisch aus `ProjectSettings/ProjectVersion.txt` erkannt).
+4. Starte das Projekt. Beim ersten Start werden die Paket-Abhängigkeiten und Shader kompiliert.
+
+### 2. Hauptszene laden
+
+- Die Startszene liegt unter `Assets/Scenes/MainScene.unity`.
+- Öffne die Szene per Doppelklick im Project Window und starte den Play-Modus mit **Strg + P** (oder Play-Button).
+
+---
+
+## 🖥️ Fenster- & Vollbildmodus
+
+Das Projekt enthält den `ScreenModeController` (`Assets/Scripts/Core/ScreenModeController.cs`), der nahtlos zwischen Fenster- und Vollbildmodus umschaltet:
+
+- **Taste `F11`** (oder **`Alt + Enter`**): Schaltet zwischen Vollbildmodus und Fenster-Modus um.
+- Die Fensterauflösung (Standard: 1280x720) wird gespeichert und beim Verlassen des Vollbilds sauber wiederhergestellt.
+
+---
+
+## 🏗️ Projektstruktur
+
+```text
+{{ project_name }}/
+├── Assets/
+│   ├── Audio/               # Soundeffekte und Hintergrundmusik (.keep)
+│   ├── Materials/           # Shader und Materialien (.keep)
+│   ├── Prefabs/             # Vorkonfigurierte GameObjects (.keep)
+│   ├── Scenes/
+│   │   ├── MainScene.unity  # Haupt-Spielfeld
+│   │   └── MainScene.unity.meta
+│   ├── Scripts/
+│   │   ├── {{ project_name }}.asmdef  # Haupt-Assembly Definition
+│   │   ├── Core/
+│   │   │   ├── GameManager.cs         # Singleton Lifecycle & Spielzustände
+│   │   │   └── ScreenModeController.cs# F11 Fenster-/Vollbild-Toggle
+│   │   └── Gameplay/
+│   │       └── PlayerController.cs    # Spielerbewegung mit Delta-Time
+│   ├── Sprites/             # 2D-Texturen und Sprites (.keep)
+│   └── Tests/               # Automatisierte NUnit-Tests
+│       ├── {{ project_name }}.Tests.asmdef
+│       ├── EditMode/        # Schnelle Unit-Tests ohne PlayMode
+│       └── PlayMode/        # Integrationstests mit Engine-Loop
+├── Packages/
+│   └── manifest.json        # Paket-Abhängigkeiten (URP, Input System, TMP)
+├── ProjectSettings/
+│   ├── EditorSettings.asset # Force Text Serialization & LF Line Endings
+│   ├── ProjectSettings.asset# Name, Firma, Version
+│   └── ProjectVersion.txt   # Exakte Unity Editor-Version
+├── .agents/                 # Coding-Agenten Konfiguration (Regeln & Skills)
+├── .gitattributes           # Unity YAML Merge & Git LFS Regeln
+├── .gitignore               # Vollständiges Unity-Gitignore
+└── AGENTS.md                # Richtlinien für KI-Assistenten
+```
+
+---
+
+## 🧪 Tests ausführen
+
+### Im Unity Editor:
+1. Öffne das Menü **Window → General → Test Runner**.
+2. Wähle den Reiter **EditMode** oder **PlayMode**.
+3. Klicke auf **Run All**, um alle Tests auszuführen.
+
+### Über die Kommandozeile (CLI):
+```bash
+Unity.exe -batchmode -runTests -projectPath . -testPlatform EditMode -testResults tests/editmode-results.xml
+Unity.exe -batchmode -runTests -projectPath . -testPlatform PlayMode -testResults tests/playmode-results.xml
+```
+
+---
+
+## 📦 Git LFS & Git Hooks
+
+- **Git LFS:** Für große Binärdateien (`.psd`, `.png`, `.fbx`, `.blend`, `.wav`, `.mp3`) ist Git LFS in `.gitattributes` vorkonfiguriert.
+- **Pre-Commit Hook:** Überprüft automatisch, ob für jedes gestagte Asset in `Assets/` eine zugehörige `.meta`-Datei existiert.
+- **Post-Commit Hook:** Bietet interaktiven SemVer-Versionsbump und aktualisiert automatisch `bundleVersion` in `ProjectSettings/ProjectSettings.asset`.

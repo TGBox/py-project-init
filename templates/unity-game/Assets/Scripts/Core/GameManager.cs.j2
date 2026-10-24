@@ -1,0 +1,115 @@
+using System;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+namespace {{ project_name | replace('-', '_') }}.Core
+{
+    /// <summary>
+    /// Central manager for game state, lifecycle, and scene management.
+    /// Uses the singleton pattern and persists across scenes.
+    /// </summary>
+    [DisallowMultipleComponent]
+    public class GameManager : MonoBehaviour
+    {
+        public static GameManager Instance { get; private set; }
+
+        public enum GameState
+        {
+            Boot,
+            MainMenu,
+            Playing,
+            Paused,
+            GameOver
+        }
+
+        [Header("State Configuration")]
+        [SerializeField] private GameState currentState = GameState.Boot;
+
+        public GameState CurrentState => currentState;
+
+        public event Action<GameState> OnStateChanged;
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+            InitializeGame();
+        }
+
+        private void Start()
+        {
+            SetState(GameState.Playing);
+        }
+
+        private void InitializeGame()
+        {
+            // Application target frame rate configuration
+            Application.targetFrameRate = 60;
+        }
+
+        public void SetState(GameState newState)
+        {
+            if (currentState == newState)
+            {
+                return;
+            }
+
+            currentState = newState;
+            HandleStateChange(newState);
+            OnStateChanged?.Invoke(newState);
+        }
+
+        private void HandleStateChange(GameState state)
+        {
+            switch (state)
+            {
+                case GameState.Playing:
+                    Time.timeScale = 1.0f;
+                    break;
+                case GameState.Paused:
+                    Time.timeScale = 0.0f;
+                    break;
+                case GameState.GameOver:
+                    Time.timeScale = 0.0f;
+                    break;
+                default:
+                    Time.timeScale = 1.0f;
+                    break;
+            }
+        }
+
+        public void TogglePause()
+        {
+            if (currentState == GameState.Playing)
+            {
+                SetState(GameState.Paused);
+            }
+            else if (currentState == GameState.Paused)
+            {
+                SetState(GameState.Playing);
+            }
+        }
+
+        public void RestartGame()
+        {
+            Time.timeScale = 1.0f;
+            SetState(GameState.Playing);
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
+
+        public void QuitGame()
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
+    }
+}

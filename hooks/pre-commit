@@ -18,7 +18,7 @@ for FILE in $STAGED_FILES; do
     if [ "$FILE_SIZE_KB" -gt "$MAX_FILE_SIZE_KB" ]; then
       echo "----------------------------------------------------------------" >&2
       echo "FEHLER: Datei '$FILE' überschreitet das Limit von 10 MB (${FILE_SIZE_KB} KB)." >&2
-      echo "Große Binärdateien sollten nicht direkt im Git-Repository versioniert werden." >&2
+      echo "Große Binärdateien sollten nicht direkt im Git-Repository versioniert werden (nutzen Sie ggf. Git LFS)." >&2
       echo "----------------------------------------------------------------" >&2
       exit 1
     fi
@@ -49,5 +49,27 @@ for FILE in $STAGED_FILES; do
     fi
   fi
 done
+
+# -----------------------------------------------------------------------------
+# 3. Unity .meta-Dateien Integrität
+# -----------------------------------------------------------------------------
+if [ -f "ProjectSettings/ProjectVersion.txt" ] || [ -d "Assets" ]; then
+  for FILE in $STAGED_FILES; do
+    case "$FILE" in
+      Assets/*|Packages/*)
+        if [[ "$FILE" != *.meta ]]; then
+          if [ ! -f "${FILE}.meta" ] && ! echo "$STAGED_FILES" | grep -Fqx "${FILE}.meta"; then
+            echo "----------------------------------------------------------------" >&2
+            echo "FEHLER: Gestagtes Unity-Asset '$FILE' besitzt keine korrespondierende .meta-Datei!" >&2
+            echo "Erwartet: '${FILE}.meta'" >&2
+            echo "In Unity benötigt jedes Asset zwingend eine passende .meta-Datei zur GUID-Verwaltung." >&2
+            echo "----------------------------------------------------------------" >&2
+            exit 1
+          fi
+        fi
+        ;;
+    esac
+  done
+fi
 
 echo "Pre-Commit Checks erfolgreich abgeschlossen."

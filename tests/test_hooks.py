@@ -532,6 +532,105 @@ class TestGitHooks(unittest.TestCase):
             # Version should NOT have changed
             self.assertIn('"version": "1.0.0"', pkg.read_text(encoding="utf-8"))
 
+    def test_pre_commit_unity_meta_validation(self):
+        """Verifies that pre-commit blocks staged assets in Assets/ missing .meta files, and allows when present."""
+        hook_path = self.hooks_dir / "pre-commit"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+
+            # Create Unity marker and an asset without .meta
+            (proj / "ProjectSettings").mkdir()
+            (proj / "ProjectSettings" / "ProjectVersion.txt").write_text("m_EditorVersion: 6000.0.38f1\n", encoding="utf-8")
+            (proj / "Assets" / "Scripts").mkdir(parents=True)
+            script_file = proj / "Assets" / "Scripts" / "Player.cs"
+            script_file.write_text("public class Player {}\n", encoding="utf-8")
+
+            # Stage only the .cs file
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+
+            # Pre-commit should fail because Player.cs.meta is missing
+            res_bad = subprocess.run(
+                [self.bash, str(hook_path)],
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            self.assertNotEqual(res_bad.returncode, 0)
+            self.assertIn("Player.cs", res_bad.stderr)
+            self.assertIn(".meta", res_bad.stderr)
+
+            # Now add Player.cs.meta and stage it
+            (proj / "Assets" / "Scripts" / "Player.cs.meta").write_text("fileFormatVersion: 2\nguid: 1234567890abcdef1234567890abcdef\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+
+            # Pre-commit should succeed now
+            res_good = subprocess.run(
+                [self.bash, str(hook_path)],
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            self.assertEqual(res_good.returncode, 0, f"pre-commit failed on valid unity assets: {res_good.stderr}")
+
+    def test_post_commit_auto_bump_unity(self):
+        """Verifies that non-interactive commit in a Unity project bumps ProjectSettings.asset bundleVersion."""
+        import shutil
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.autotag", "true"], cwd=proj, check=True)
+
+            hooks_dir = proj / ".git" / "hooks"
+            shutil.copy2(self.hooks_dir / "pre-commit", hooks_dir / "pre-commit")
+            shutil.copy2(self.hooks_dir / "commit-msg", hooks_dir / "commit-msg")
+            shutil.copy2(self.hooks_dir / "post-commit", hooks_dir / "post-commit")
+
+            (proj / "ProjectSettings").mkdir()
+            settings = proj / "ProjectSettings" / "ProjectSettings.asset"
+            settings.write_text("PlayerSettings:\n  productName: UnityTest\n  bundleVersion: 0.1.0\n", encoding="utf-8")
+            (proj / "README.md").write_text("# Game\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+
+            env = os.environ.copy()
+            env["GIT_HOOKS_NON_INTERACTIVE"] = "1"
+
+            # 1. feat -> minor bump (0.1.0 -> 0.2.0)
+            res1 = subprocess.run(
+                ["git", "commit", "-m", "feat(player): add player jump"],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            self.assertEqual(res1.returncode, 0, f"feat commit failed: {res1.stderr}")
+            self.assertIn("bundleVersion: 0.2.0", settings.read_text(encoding="utf-8"))
+            tags = subprocess.check_output(["git", "tag", "-l"], cwd=proj, text=True).splitlines()
+            self.assertIn("v0.2.0", tags)
+
+            # 2. fix -> patch bump (0.2.0 -> 0.2.1)
+            (proj / "README.md").write_text("# Game v2\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            res2 = subprocess.run(
+                ["git", "commit", "-m", "fix(physics): fix gravity scale"],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False
+            )
+            self.assertEqual(res2.returncode, 0, f"fix commit failed: {res2.stderr}")
+            self.assertIn("bundleVersion: 0.2.1", settings.read_text(encoding="utf-8"))
+            tags = subprocess.check_output(["git", "tag", "-l"], cwd=proj, text=True).splitlines()
+            self.assertIn("v0.2.1", tags)
+
 
 if __name__ == "__main__":
     unittest.main()

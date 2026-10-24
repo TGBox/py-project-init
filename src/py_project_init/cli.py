@@ -19,6 +19,9 @@ def run_cli(args: list[str] | None = None) -> int:
         except (AttributeError, OSError):
             pass
 
+    if args is None:
+        args = sys.argv[1:]
+
     # If no arguments provided or explicitly requested --gui, signal to launch GUI
     if not args or "--gui" in args:
         from PySide6.QtWidgets import QApplication

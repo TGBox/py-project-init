@@ -1,6 +1,6 @@
 pre-commit:
-  name: "Pre-Commit: Secret- & Size-Scanner"
-  description: "Blockiert gestagte Secrets (.env/Keys) und Dateien >10MB vor dem Commit."
+  name: "Pre-Commit: Secret-, Size- & Meta-Scanner"
+  description: "Blockiert gestagte Secrets (.env/Keys), Dateien >10MB und prüft Unity .meta-Dateien-Integrität."
   default: true
 
 commit-msg:

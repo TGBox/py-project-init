@@ -24,6 +24,11 @@ if echo "$DIFF_FILES" | grep -q "Cargo.lock"; then
     fi
 fi
 
+if echo "$DIFF_FILES" | grep -q "Packages/manifest.json"; then
+    echo "Packages/manifest.json nach Merge/Pull aktualisiert – Unity Packages haben sich geändert."
+    echo "Bitte Unity Editor in den Vordergrund bringen, um Packages neu zu importieren."
+fi
+
 # Env-Vergleich: Prüfen ob in .env.example Variablen existieren, die in .env fehlen
 if [ -f ".env.example" ] && [ -f ".env" ]; then
     MISSING_KEYS=$(grep -E '^[A-Za-z0-9_]+=' .env.example | cut -d '=' -f 1 | while read -r KEY; do
