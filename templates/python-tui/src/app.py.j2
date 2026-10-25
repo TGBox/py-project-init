@@ -1,5 +1,7 @@
 """Main Textual application class."""
 
+from typing import ClassVar
+
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Button, Footer, Header, Label, Static
@@ -44,7 +46,7 @@ class {{ project_name | replace("-", " ") | replace("_", " ") | title | replace(
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[tuple[str, str, str]]] = [
         ("q", "quit", "Beenden"),
         ("d", "toggle_dark", "Farbschema"),
     ]

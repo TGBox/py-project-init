@@ -1,4 +1,5 @@
 import sys
+
 import PyInstaller.__main__
 
 

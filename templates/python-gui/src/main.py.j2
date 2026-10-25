@@ -1,10 +1,13 @@
+{% if framework in ["pyside6", "pyqt6"] %}
 import sys
+
 {% if framework == "pyside6" %}
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
 from PySide6.QtCore import Qt
-{% elif framework == "pyqt6" %}
-from PyQt6.QtWidgets import QApplication, QMainWindow, QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
+{% else %}
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QLabel, QMainWindow
+{% endif %}
 {% elif framework == "tkinter" %}
 import tkinter as tk
 {% elif framework == "wxpython" %}

@@ -1,13 +1,15 @@
 import sys
 {% if framework == "arcade" %}
+
 import arcade
+
 from src.settings import (
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    TITLE,
     COLOR_BACKGROUND,
     COLOR_PRIMARY,
     COLOR_TEXT,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    TITLE,
 )
 
 
@@ -55,18 +57,20 @@ class GameWindow(arcade.Window):
 
 
 def main() -> None:
-    window = GameWindow()
+    GameWindow()
     arcade.run()
 {% else %}
+
 import pygame
+
 from src.settings import (
-    SCREEN_WIDTH,
-    SCREEN_HEIGHT,
-    FPS,
-    TITLE,
     COLOR_BACKGROUND,
     COLOR_PRIMARY,
     COLOR_TEXT,
+    FPS,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    TITLE,
 )
 
 
