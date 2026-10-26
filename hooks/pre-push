@@ -6,7 +6,15 @@ URL="$2"
 
 # Git übergibt die zu pushenden Refs via Stdin:
 # <local ref> <local sha> <remote ref> <remote sha>
+PUSH_LINES=()
 while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
+    LOCAL_REF="${LOCAL_REF%$'\r'}"
+    LOCAL_SHA="${LOCAL_SHA%$'\r'}"
+    REMOTE_REF="${REMOTE_REF%$'\r'}"
+    REMOTE_SHA="${REMOTE_SHA%$'\r'}"
+    if [ -z "$LOCAL_REF" ]; then
+        continue
+    fi
     if [ "$REMOTE_REF" = "refs/heads/main" ] || [ "$REMOTE_REF" = "refs/heads/master" ]; then
         echo "----------------------------------------------------------------" >&2
         echo "FEHLER: Direkter Push auf '$REMOTE_REF' ist blockiert!" >&2
@@ -14,10 +22,91 @@ while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
         echo "----------------------------------------------------------------" >&2
         exit 1
     fi
+    PUSH_LINES+=("$LOCAL_REF $LOCAL_SHA $REMOTE_REF $REMOTE_SHA")
 done
 
 if [ "$GIT_PRE_PUSH_SKIP_TESTS" = "1" ]; then
     exit 0
+fi
+
+# -----------------------------------------------------------------------------
+# Smarte Testausführung (hooks.smarttests):
+# Wenn aktiviert, wird geprüft, ob seit dem letzten Push Codedateien geändert wurden.
+# Wurden nur Konfigurations-, Doku- oder Asset-Dateien geändert, wird das Test-Gate übersprungen.
+# Wurde mindestens eine Codedatei verändert, werden alle Tests ausgeführt.
+# -----------------------------------------------------------------------------
+SMART_TESTS=$(git config --bool hooks.smarttests 2>/dev/null || echo "false")
+if [ "$GIT_PRE_PUSH_SMART_TESTS" = "1" ] || [ "$GIT_PRE_PUSH_SMART_TESTS" = "true" ]; then
+    SMART_TESTS="true"
+elif [ "$GIT_PRE_PUSH_SMART_TESTS" = "0" ] || [ "$GIT_PRE_PUSH_SMART_TESTS" = "false" ]; then
+    SMART_TESTS="false"
+fi
+
+if [ "$SMART_TESTS" = "true" ]; then
+    CHANGED_FILES=""
+    ALL_DELETIONS=1
+
+    if [ ${#PUSH_LINES[@]} -gt 0 ]; then
+        for line in "${PUSH_LINES[@]}"; do
+            read -r L_REF L_SHA R_REF R_SHA <<< "$line"
+            L_REF="${L_REF%$'\r'}"
+            L_SHA="${L_SHA%$'\r'}"
+            R_REF="${R_REF%$'\r'}"
+            R_SHA="${R_SHA%$'\r'}"
+            if [ -z "$L_SHA" ] || [ "$L_SHA" = "0000000000000000000000000000000000000000" ] || [ "$L_SHA" = "000000" ]; then
+                continue
+            fi
+            ALL_DELETIONS=0
+
+            if [ "$R_SHA" = "0000000000000000000000000000000000000000" ] || [ "$R_SHA" = "000000" ]; then
+                # Neuer Branch: Ermittle gemeinsamen Vorfahren mit remote default branch oder lokalem main
+                BASE_REF=$(git merge-base "$L_SHA" "$REMOTE/main" 2>/dev/null || git merge-base "$L_SHA" origin/main 2>/dev/null || git merge-base "$L_SHA" main 2>/dev/null || git merge-base "$L_SHA" master 2>/dev/null || true)
+                if [ -n "$BASE_REF" ]; then
+                    DIFF_FILES=$(git diff --name-only "$BASE_REF" "$L_SHA" 2>/dev/null || true)
+                else
+                    DIFF_FILES=$(git diff-tree --no-commit-id --name-only -r "$L_SHA" 2>/dev/null || true)
+                fi
+            else
+                DIFF_FILES=$(git diff --name-only "$R_SHA" "$L_SHA" 2>/dev/null || true)
+            fi
+            CHANGED_FILES=$(printf "%s\n%s" "$CHANGED_FILES" "$DIFF_FILES")
+        done
+
+        if [ "$ALL_DELETIONS" = "1" ]; then
+            # Nur Branch-Löschungen, keine Tests notwendig
+            exit 0
+        fi
+    else
+        # Fallback (z.B. manuelle Hook-Ausführung ohne Stdin)
+        UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+        if [ -n "$UPSTREAM" ]; then
+            CHANGED_FILES=$(git diff --name-only "$UPSTREAM..HEAD" 2>/dev/null || true)
+        else
+            BASE_REF=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null || true)
+            if [ -n "$BASE_REF" ]; then
+                CHANGED_FILES=$(git diff --name-only "$BASE_REF..HEAD" 2>/dev/null || true)
+            else
+                CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null || true)
+            fi
+        fi
+    fi
+
+    # Bereinigen und Duplikate entfernen
+    CLEAN_CHANGED=$(echo "$CHANGED_FILES" | sed '/^[[:space:]]*$/d' | sort -u)
+
+    # Prüfe auf gängige Quellcode-Dateiendungen
+    CODE_CHANGES=$(echo "$CLEAN_CHANGED" | grep -Ei '\.(py|rs|ts|tsx|js|jsx|mjs|cjs|vue|svelte|cs|shader|asmdef|go|c|cpp|cc|cxx|h|hpp|sh|bash|ps1)$' || true)
+
+    if [ -z "$CODE_CHANGES" ]; then
+        echo "----------------------------------------------------------------"
+        echo "Smarte Testausführung aktiv (hooks.smarttests):"
+        echo "Keine Codedateien verändert (nur Konfiguration/Dokumentation)."
+        echo "Test-Gate wird übersprungen."
+        echo "----------------------------------------------------------------"
+        exit 0
+    else
+        echo "Smarte Testausführung aktiv: Codedateien wurden verändert -> Führe vollständige Testsuite aus."
+    fi
 fi
 
 # Wenn Tests vorhanden sind, vor dem Push ausführen:

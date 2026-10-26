@@ -58,7 +58,7 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
     - **`post-checkout` (Dependency-Sync & Branch-Check):** Führt `uv sync` oder `npm install` aus, meldet geänderte Unity Packages (`manifest.json`) und warnt vor direkter Arbeit auf `main`.
     - **`post-merge` (Lockfile-Sync & .env-Vergleich):** Synchronisiert Abhängigkeiten nach Merges/Pulls, meldet Unity Package-Updates und warnt vor fehlenden Variablen aus `.env.example`.
     - **`pre-rebase` (Historien-Schutz):** Blockiert versehentliches Rebasen der Haupt-Branches (`main`/`master`).
-    - **`pre-push` (Branch-Schutz & Test-Gate):** Blockiert direkte Pushes auf `main`/`master` und führt vor dem Push die Test-Suite aus (pytest, cargo, vitest, dotnet, unity).
+    - **`pre-push` (Branch-Schutz & Test-Gate mit smarter Testausführung):** Blockiert direkte Pushes auf `main`/`master` und führt vor dem Push die Test-Suite aus (pytest, cargo, vitest, dotnet, unity). Über `hooks.smarttests` konfigurierbar: Wurde mindestens eine Codedatei verändert, werden alle Tests ausgeführt; bei reinen Konfigurations- oder Dokumentationsänderungen wird das Test-Gate zeitsparend übersprungen.
   - Automatischer initialer Commit während der Generierung via `--no-verify`.
 - **Agenten-Regeln & Skills (.agents/):**
   - Modulare Bibliothek unter `assets/agent_configs/` für Coding-Assistenten.

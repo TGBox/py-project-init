@@ -266,10 +266,16 @@ class RetrofitDialog(QDialog):
         self.enable_tags_cb.setChecked(True)
         hooks_layout.addWidget(self.enable_tags_cb)
 
+        self.enable_smart_tests_cb = QCheckBox("Smarte Testausführung aktivieren (hooks.smarttests: Test-Gate bei reinen Config-/Doku-Änderungen überspringen)")
+        self.enable_smart_tests_cb.setChecked(True)
+        self.enable_smart_tests_cb.setToolTip("Führt im Pre-Push-Hook alle Tests aus, wenn Codedateien geändert wurden. Überspringt das Test-Gate, wenn nur Konfigurations- oder Dokumentationsdateien geändert wurden.")
+        hooks_layout.addWidget(self.enable_smart_tests_cb)
+
         self.enable_hooks_cb.toggled.connect(
             lambda checked: (
                 [cb.setEnabled(checked) for cb in self.hook_checkboxes.values()],
-                self.enable_tags_cb.setEnabled(checked)
+                self.enable_tags_cb.setEnabled(checked),
+                self.enable_smart_tests_cb.setEnabled(checked)
             )
         )
         hooks_layout.addLayout(hooks_list_layout)
@@ -361,7 +367,8 @@ class RetrofitDialog(QDialog):
                     target_path,
                     selected_hooks,
                     log_callback=self.log_view.append,
-                    enable_autotag=self.enable_tags_cb.isChecked()
+                    enable_autotag=self.enable_tags_cb.isChecked(),
+                    enable_smart_tests=self.enable_smart_tests_cb.isChecked(),
                 )
             else:
                 self.log_view.append("Keine Git Hooks ausgewählt.")

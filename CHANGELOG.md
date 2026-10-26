@@ -2,7 +2,9 @@
 
 ## SemVer v3.0.1
 
-- 2026-10-26 (a87ba43): fix: fix deprecated default model selection for gemini, feat: add manual key verification button, add automated saving of the key on first successful call with direct feedback via info dialog
+- 2026-10-26 (3e46dc6): fix: change pre push hook templates to check for changed code files before starting a full test suite
+- 2026-10-26 (0342028): Merge pull request #3 from TGBox/ai-decide
+- 2026-10-26 (d34165d): fix: fix deprecated default model selection for gemini, feat: add manual key verification button, add automated saving of the key on first successful call with direct feedback via info dialog
 - 2026-10-26 (b71e11c): feat: add new ai advisor where the user can enter and safely store ai keys for local or external ai models to provide advice on the selection of an ai framework or a project title, add ui integration, add testsuites
 - 2026-10-26 (50478ce): Merge pull request #2 from TGBox/github
 - 2026-10-26 (1b9de17): feat: add option to directly create the external repo on github as well, utilizing PATs, feat: allow for branching in the same way as for gitlab, feat: add cli options for all new actions, feat: add new tests and update README.md

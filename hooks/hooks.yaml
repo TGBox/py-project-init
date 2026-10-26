@@ -35,5 +35,5 @@ pre-rebase:
 
 pre-push:
   name: "Pre-Push: Branch-Schutz & Test-Gate"
-  description: "Blockiert direkte Pushes auf main/master und führt vor dem Push die Test-Suite aus."
+  description: "Blockiert direkte Pushes auf main/master und führt vor dem Push die Test-Suite aus (optional mit smarter Testausführung)."
   default: true

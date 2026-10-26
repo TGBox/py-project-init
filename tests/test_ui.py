@@ -27,6 +27,7 @@ class TestMainWindow(unittest.TestCase):
         # Check git hooks section - all 8 client hooks
         self.assertTrue(self.window.git_hooks_enable_cb.isChecked())
         self.assertTrue(self.window.git_tags_enable_cb.isChecked())
+        self.assertTrue(self.window.git_smart_tests_cb.isChecked())
         expected_hooks = [
             "pre-commit", "commit-msg", "prepare-commit-msg", "post-commit",
             "post-checkout", "post-merge", "pre-rebase", "pre-push"
@@ -282,6 +283,19 @@ class TestMainWindow(unittest.TestCase):
         self.assertFalse(ctx_gh["gitlab"]["enabled"])
         self.assertTrue(ctx_gh["github"]["enabled"])
         self.assertEqual(ctx_gh["github"]["owner"], "test-org")
+
+
+    def test_retrofit_dialog_smart_tests_option(self):
+        """Verifies RetrofitDialog exposes smart tests checkbox and toggles it."""
+        dialog = RetrofitDialog(self.window.template_manager, parent=self.window)
+        self.assertTrue(hasattr(dialog, "enable_smart_tests_cb"))
+        self.assertTrue(dialog.enable_smart_tests_cb.isChecked())
+        # Disable hooks -> smart tests checkbox should be disabled
+        dialog.enable_hooks_cb.setChecked(False)
+        self.assertFalse(dialog.enable_smart_tests_cb.isEnabled())
+        dialog.enable_hooks_cb.setChecked(True)
+        self.assertTrue(dialog.enable_smart_tests_cb.isEnabled())
+        dialog.close()
 
 
 if __name__ == "__main__":
