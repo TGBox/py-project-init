@@ -29,7 +29,12 @@ from py_project_init.core.gitlab import (
     delete_token as delete_gitlab_token,
 )
 from py_project_init.ui.styles import DARK_THEME
-from py_project_init.ui.dialogs import PreviewDialog, RetrofitDialog, CreateTemplateDialog
+from py_project_init.ui.dialogs import (
+    PreviewDialog,
+    RetrofitDialog,
+    CreateTemplateDialog,
+    AiAdvisorDialog,
+)
 
 CHECKED_TOOLS = ["git", "uv", "cargo", "npm", "go", "dotnet"]
 _VALID_NAME = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]*$")
@@ -184,6 +189,14 @@ class MainWindow(QMainWindow):
         preview_action.triggered.connect(self._show_preview)
         tools_menu.addAction(preview_action)
 
+        tools_menu.addSeparator()
+
+        ai_advisor_action = QAction("✨ KI-Projektberater & Entscheidungshilfe...", self)
+        ai_advisor_action.setShortcut(QKeySequence("Ctrl+Shift+A"))
+        ai_advisor_action.setStatusTip("KI-Assistent zur Empfehlung von Technologie, Sprache, Titel und Projektvorlage")
+        ai_advisor_action.triggered.connect(self._open_ai_advisor)
+        tools_menu.addAction(ai_advisor_action)
+
         # Ansicht Menü (Fullscreen & Windowed mode per user rule)
         view_menu = menubar.addMenu("Ansicht")
 
@@ -330,6 +343,12 @@ class MainWindow(QMainWindow):
         open_tpl_btn.setObjectName("toolButton")
         open_tpl_btn.clicked.connect(self._open_templates_dir)
         tpl_header_layout.addWidget(open_tpl_btn)
+
+        self.ai_advisor_btn = QPushButton("✨ KI-Entscheidungshilfe...")
+        self.ai_advisor_btn.setObjectName("toolButton")
+        self.ai_advisor_btn.setToolTip("Unterstützung durch KI-Modelle bei Sprach-, Vorlagen- und Projektwahl (Ctrl+Shift+A)")
+        self.ai_advisor_btn.clicked.connect(self._open_ai_advisor)
+        tpl_header_layout.addWidget(self.ai_advisor_btn)
 
         self.template_combo = QComboBox()
         self.template_combo.currentIndexChanged.connect(self._on_template_changed)
@@ -1910,6 +1929,41 @@ class MainWindow(QMainWindow):
         dialog = CreateTemplateDialog(self.template_manager, self)
         dialog.exec()
         self._reload_templates()
+
+    def _open_ai_advisor(self):
+        """Opens the AI advisor dialog to help the user choose language, template, and project name."""
+        available_templates = []
+        for t_id, meta in self.template_manager.templates.items():
+            available_templates.append({
+                "id": t_id,
+                "name": meta.get("name", t_id),
+                "language": meta.get("language", "Universal"),
+                "description": meta.get("description", ""),
+                "recommended_tools": meta.get("recommended_tools", []),
+            })
+
+        dialog = AiAdvisorDialog(available_templates, parent=self)
+        if dialog.exec() and dialog.selected_advice:
+            advice = dialog.selected_advice
+            if advice.project_name:
+                self.name_input.setText(advice.project_name)
+            if advice.description:
+                self.desc_input.setText(advice.description)
+
+            if advice.recommended_template_id:
+                idx = self.template_combo.findData(advice.recommended_template_id)
+                if idx >= 0:
+                    self.template_combo.setCurrentIndex(idx)
+
+            self.tabs.setCurrentIndex(0)
+            self.statusBar().showMessage(
+                f"✨ KI-Empfehlung übernommen: {advice.project_name or 'Projekt'} ({advice.recommended_template_id})",
+                5000,
+            )
+            self.log_view.append(
+                f"✨ KI-Entscheidungshilfe übernommen: {advice.project_name} "
+                f"[{advice.recommended_template_id}] ({advice.recommended_language})"
+            )
 
     # ── Über-Dialog ─────────────────────────────────────────────────────────
 
