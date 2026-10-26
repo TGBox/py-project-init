@@ -13,7 +13,7 @@ KEYRING_SERVICE = "py-project-init-ai"
 PROVIDER_DEFAULTS = {
     "gemini": {
         "name": "Google Gemini",
-        "default_model": "gemini-1.5-flash",
+        "default_model": "gemini-2.5-flash",
         "base_url": "https://generativelanguage.googleapis.com",
         "needs_key": True,
         "env_var": "GEMINI_API_KEY",
@@ -61,7 +61,7 @@ class AiAdvisorError(RuntimeError):
 class AiProviderConfig:
     provider: str = "gemini"
     api_key: str = ""
-    model: str = "gemini-1.5-flash"
+    model: str = "gemini-2.5-flash"
     base_url: str = ""
 
     def get_effective_base_url(self) -> str:
@@ -188,7 +188,7 @@ def _query_gemini(
     api_key: str,
     timeout: float,
 ) -> AiAdvice:
-    model = config.model.strip() or "gemini-1.5-flash"
+    model = config.model.strip() or "gemini-2.5-flash"
     url = f"{base_url}/v1beta/models/{model}:generateContent?key={urllib.parse.quote(api_key)}"
 
     body_data = {
@@ -317,6 +317,125 @@ def _dict_to_advice(data: dict[str, Any], raw_response: str) -> AiAdvice:
         alternatives=list(data.get("alternatives") or []),
         raw_response=raw_response,
     )
+
+
+def verify_ai_connection(config: AiProviderConfig, timeout: float = 12.0) -> dict[str, Any]:
+    """Tests if the configured API key and/or provider endpoint are valid and reachable.
+
+    Returns a dict with verification details on success, or raises AiAdvisorError on failure.
+    """
+    provider = config.provider.lower().strip()
+    base_url = config.get_effective_base_url()
+    api_key = config.api_key.strip()
+    info = PROVIDER_DEFAULTS.get(provider, {})
+    needs_key = info.get("needs_key", True)
+
+    if needs_key and not api_key:
+        raise AiAdvisorError(
+            f"Kein API-Key angegeben. Bitte trage deinen API-Key für '{info.get('name', provider)}' ein."
+        )
+
+    if provider == "gemini":
+        url = f"{base_url}/v1beta/models?key={urllib.parse.quote(api_key)}"
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"}, method="GET")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as res:
+                data = json.loads(res.read().decode("utf-8"))
+                models = data.get("models", [])
+                return {
+                    "ok": True,
+                    "provider": "gemini",
+                    "message": f"API-Key ist gültig ({len(models)} Gemini-Modelle verfügbar).",
+                    "model_count": len(models),
+                }
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try:
+                err_data = json.loads(e.read() or b"{}")
+                detail = err_data.get("error", {}).get("message", "")
+            except Exception:
+                pass
+            if e.code in (400, 403):
+                msg = f"API-Key ungültig oder abgelaufen (HTTP {e.code}): {detail or e.reason}"
+            else:
+                msg = f"Google Gemini HTTP {e.code}: {detail or e.reason}"
+            raise AiAdvisorError(msg, status=e.code) from e
+        except urllib.error.URLError as e:
+            raise AiAdvisorError(f"Gemini-API nicht erreichbar ({base_url}): {e.reason}") from e
+
+    elif provider == "openrouter":
+        url = f"{base_url}/auth/key"
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "HTTP-Referer": "https://github.com/DaniBani/py-project-init",
+            "X-Title": "py-project-init",
+        }
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as res:
+                data = json.loads(res.read().decode("utf-8"))
+                key_data = data.get("data", {})
+                label = key_data.get("label") or "OpenRouter Key"
+                limit = key_data.get("limit")
+                usage = key_data.get("usage")
+                extra = f" (Limit: ${limit:.2f}, Verbraucht: ${usage or 0:.2f})" if limit is not None else ""
+                return {
+                    "ok": True,
+                    "provider": "openrouter",
+                    "message": f"API-Key '{label}' ist gültig{extra}.",
+                }
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try:
+                err_data = json.loads(e.read() or b"{}")
+                detail = err_data.get("error", {}).get("message", "")
+            except Exception:
+                pass
+            if e.code == 401:
+                msg = f"OpenRouter API-Key ungültig (HTTP 401): {detail or 'Unauthorized'}"
+            else:
+                msg = f"OpenRouter HTTP {e.code}: {detail or e.reason}"
+            raise AiAdvisorError(msg, status=e.code) from e
+        except urllib.error.URLError as e:
+            raise AiAdvisorError(f"OpenRouter nicht erreichbar ({base_url}): {e.reason}") from e
+
+    else:
+        # OpenAI, Ollama, Custom: use /models endpoint
+        url = f"{base_url}/models"
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        req = urllib.request.Request(url, headers=headers, method="GET")
+        try:
+            with urllib.request.urlopen(req, timeout=timeout, context=_ssl_context()) as res:
+                data = json.loads(res.read().decode("utf-8"))
+                models = data.get("data", []) or data.get("models", [])
+                prov_name = info.get("name", provider)
+                return {
+                    "ok": True,
+                    "provider": provider,
+                    "message": f"Verbindung zu {prov_name} erfolgreich ({len(models)} Modelle verfügbar).",
+                    "model_count": len(models),
+                }
+        except urllib.error.HTTPError as e:
+            detail = ""
+            try:
+                err_data = json.loads(e.read() or b"{}")
+                detail = err_data.get("error", {}).get("message", "")
+            except Exception:
+                pass
+            if e.code == 401:
+                msg = f"API-Key ungültig (HTTP 401): {detail or 'Unauthorized'}"
+            else:
+                msg = f"Server antwortete mit HTTP {e.code}: {detail or e.reason}"
+            raise AiAdvisorError(msg, status=e.code) from e
+        except urllib.error.URLError as e:
+            if provider == "ollama":
+                raise AiAdvisorError(
+                    f"Ollama unter '{base_url}' nicht erreichbar ({e.reason}).\n"
+                    "Bitte stelle sicher, dass Ollama lokal gestartet ist (z. B. im Terminal mit 'ollama serve')."
+                ) from e
+            raise AiAdvisorError(f"Server unter '{base_url}' nicht erreichbar: {e.reason}") from e
 
 
 # ── Credential Storage via keyring & Environment Variables ───────────────────

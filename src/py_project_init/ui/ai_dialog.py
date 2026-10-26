@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 )
 from py_project_init.core.ai_advisor import (
     AiAdvice, AiProviderConfig, query_ai_advisor,
+    verify_ai_connection,
     load_ai_key, save_ai_key, delete_ai_key,
     PROVIDER_DEFAULTS, AiAdvisorError
 )
@@ -129,18 +130,25 @@ class AiAdvisorDialog(QDialog):
 
         row1.addWidget(QLabel("Modell:"))
         self.model_input = QLineEdit()
-        self.model_input.setPlaceholderText("z. B. gemini-1.5-flash")
+        self.model_input.setPlaceholderText("z. B. gemini-2.5-flash")
         row1.addWidget(self.model_input, 1)
         config_layout.addLayout(row1)
 
-        # Row 2: API Key & URL
+        # Row 2: API Key
         self.key_row = QHBoxLayout()
         self.key_label = QLabel("API-Key:")
         self.key_input = QLineEdit()
         self.key_input.setEchoMode(QLineEdit.Password)
         self.key_input.setPlaceholderText("API-Key eintragen...")
+        self.key_input.textChanged.connect(self._on_key_changed)
         self.key_row.addWidget(self.key_label)
         self.key_row.addWidget(self.key_input, 1)
+
+        self.verify_key_btn = QPushButton("🔑 Key prüfen")
+        self.verify_key_btn.setObjectName("toolButton")
+        self.verify_key_btn.setToolTip("Überprüft die Gültigkeit des API-Keys und speichert ihn bei Erfolg")
+        self.verify_key_btn.clicked.connect(self._verify_connection)
+        self.key_row.addWidget(self.verify_key_btn)
 
         self.save_key_cb = QCheckBox("Im Windows-Tresor merken")
         self.save_key_cb.setChecked(True)
@@ -153,7 +161,18 @@ class AiAdvisorDialog(QDialog):
         self.url_input.setPlaceholderText("Standard-URL des Providers")
         self.url_row.addWidget(self.url_label)
         self.url_row.addWidget(self.url_input, 1)
+
+        self.verify_url_btn = QPushButton("🔌 Endpunkt prüfen")
+        self.verify_url_btn.setObjectName("toolButton")
+        self.verify_url_btn.setToolTip("Prüft die Erreichbarkeit des lokalen/benutzerdefinierten Dienstes")
+        self.verify_url_btn.clicked.connect(self._verify_connection)
+        self.url_row.addWidget(self.verify_url_btn)
         config_layout.addLayout(self.url_row)
+
+        self.key_status_label = QLabel()
+        self.key_status_label.setWordWrap(True)
+        self.key_status_label.setVisible(False)
+        config_layout.addWidget(self.key_status_label)
 
         layout.addWidget(config_box)
 
@@ -272,7 +291,11 @@ class AiAdvisorDialog(QDialog):
         needs_key = info.get("needs_key", True)
         self.key_label.setVisible(needs_key)
         self.key_input.setVisible(needs_key)
+        self.verify_key_btn.setVisible(needs_key)
         self.save_key_cb.setVisible(needs_key)
+        self.verify_url_btn.setVisible(not needs_key)
+        self.key_status_label.setVisible(False)
+        self.key_status_label.setText("")
 
         if needs_key:
             stored_key = load_ai_key(provider)
@@ -283,6 +306,80 @@ class AiAdvisorDialog(QDialog):
         # Custom URL row is only editable for custom or ollama
         is_custom_or_local = provider in ("custom", "ollama")
         self.url_input.setEnabled(is_custom_or_local)
+
+    def _on_key_changed(self):
+        self.key_status_label.setVisible(False)
+        self.key_status_label.setText("")
+
+    def _verify_connection(self):
+        provider = self.provider_combo.currentData()
+        info = PROVIDER_DEFAULTS.get(provider, {})
+        api_key = self.key_input.text().strip()
+        needs_key = info.get("needs_key", True)
+
+        if needs_key and not api_key:
+            QMessageBox.warning(
+                self,
+                "API-Key fehlt",
+                f"Bitte trage zuerst einen API-Key für '{info.get('name', provider)}' ein, bevor du die Prüfung startest.",
+            )
+            return
+
+        config = AiProviderConfig(
+            provider=provider,
+            api_key=api_key,
+            model=self.model_input.text().strip() or info.get("default_model", ""),
+            base_url=self.url_input.text().strip() or info.get("base_url", ""),
+        )
+
+        self.verify_key_btn.setEnabled(False)
+        self.verify_url_btn.setEnabled(False)
+        self.key_status_label.setVisible(True)
+        self.key_status_label.setText("⏳ Überprüfe Verbindung & API-Key...")
+        self.key_status_label.setStyleSheet("color: #7aa2f7;")
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+
+        try:
+            res = verify_ai_connection(config, timeout=12.0)
+            QApplication.restoreOverrideCursor()
+
+            store_text = ""
+            if needs_key and api_key:
+                saved = save_ai_key(provider, api_key)
+                if saved:
+                    store_text = "\n\nDer API-Key wurde sicher im Windows-Tresor gespeichert."
+                else:
+                    store_text = "\n\nHinweis: Der Key konnte nicht im Tresor abgelegt werden."
+
+            self.key_status_label.setText(f"✔ {res.get('message', 'Verbindung erfolgreich.')}")
+            self.key_status_label.setStyleSheet("color: #9ece6a; font-weight: 600;")
+
+            provider_name = info.get("name", provider)
+            QMessageBox.information(
+                self,
+                "Verifizierung erfolgreich",
+                f"✔ Verbindung zu {provider_name} erfolgreich hergestellt!\n\n"
+                f"{res.get('message', '')}"
+                f"{store_text}",
+            )
+        except AiAdvisorError as err:
+            QApplication.restoreOverrideCursor()
+            self.key_status_label.setText(f"❌ Verifizierung fehlgeschlagen: {err}")
+            self.key_status_label.setStyleSheet("color: #f7768e; font-weight: 600;")
+            provider_name = info.get("name", provider)
+            QMessageBox.critical(
+                self,
+                "Verifizierung fehlgeschlagen",
+                f"Die Prüfung für {provider_name} ist fehlgeschlagen:\n\n{err}",
+            )
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            self.key_status_label.setText(f"❌ Fehler: {e}")
+            self.key_status_label.setStyleSheet("color: #f7768e; font-weight: 600;")
+            QMessageBox.critical(self, "Fehler", f"Unerwarteter Fehler bei der Verifizierung:\n{e}")
+        finally:
+            self.verify_key_btn.setEnabled(True)
+            self.verify_url_btn.setEnabled(True)
 
     def _insert_example(self, example_text: str | None = None):
         if example_text:
