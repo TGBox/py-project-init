@@ -3,7 +3,8 @@ import sys
 from pathlib import Path
 
 from py_project_init.core.generator import TemplateManager
-from py_project_init.core.gitlab import load_token
+from py_project_init.core.github import load_token as load_github_token
+from py_project_init.core.gitlab import load_token as load_gitlab_token
 
 
 def run_cli(args: list[str] | None = None) -> int:
@@ -126,12 +127,63 @@ def run_cli(args: list[str] | None = None) -> int:
         help="SSH- statt HTTPS-URL als Remote verwenden",
     )
     parser.add_argument(
+        "--github",
+        action="store_true",
+        help="Projekt direkt auf GitHub anlegen und initialen Commit pushen",
+    )
+    parser.add_argument(
+        "--github-url",
+        default="https://github.com",
+        help="GitHub-Instanz (Standard: https://github.com, abweichend für GitHub Enterprise)",
+    )
+    parser.add_argument(
+        "--github-owner",
+        default="",
+        help="Organisation oder Benutzername auf GitHub (leer = persönlicher Account)",
+    )
+    parser.add_argument(
+        "--github-visibility",
+        default="private",
+        choices=["private", "public", "internal"],
+        help="Sichtbarkeit des neuen GitHub-Repositories (Standard: private)",
+    )
+    parser.add_argument(
+        "--github-work-branch",
+        default="develop",
+        help="Branch, auf den der initiale Commit gepusht wird (Standard: develop)",
+    )
+    parser.add_argument(
+        "--github-no-pr",
+        action="store_true",
+        help="Keinen Pull Request in den Default-Branch anlegen",
+    )
+    parser.add_argument(
+        "--github-ssh",
+        action="store_true",
+        help="SSH- statt HTTPS-URL als GitHub-Remote verwenden",
+    )
+    parser.add_argument(
         "--retrofit-agents",
         metavar="DIR",
         help="Agenten-Konfiguration in bestehendem Projektverzeichnis nachrüsten",
     )
 
     parsed = parser.parse_args(args)
+
+    has_gitlab = bool(parsed.gitlab_url)
+    has_github = bool(
+        parsed.github
+        or "--github-url" in args
+        or "--github-owner" in args
+        or "--github-ssh" in args
+        or "--github-no-pr" in args
+    )
+    if has_gitlab and has_github:
+        print(
+            "Fehler: Es kann nur entweder GitLab (--gitlab-url) oder GitHub (--github / --github-*) angegeben werden, nicht beides gleichzeitig.",
+            file=sys.stderr,
+        )
+        return 1
 
     base_dir = Path(__file__).resolve().parent.parent.parent
     templates_dir = base_dir / "templates"
@@ -222,6 +274,7 @@ def run_cli(args: list[str] | None = None) -> int:
         "selected_agent_skills": recommended.get("skills", []),
         "default_branch": parsed.default_branch,
         "gitlab": {"enabled": False},
+        "github": {"enabled": False},
     }
 
     for opt in template_meta.get("options", []):
@@ -230,7 +283,7 @@ def run_cli(args: list[str] | None = None) -> int:
             context[opt_id] = opt.get("default")
 
     if parsed.gitlab_url:
-        token = load_token(parsed.gitlab_url)
+        token = load_gitlab_token(parsed.gitlab_url)
         if not token:
             print(
                 "Fehler: Kein GitLab-Token gefunden. Setze GITLAB_TOKEN oder speichere ihn einmal über die GUI.",
@@ -246,6 +299,26 @@ def run_cli(args: list[str] | None = None) -> int:
             "work_branch": parsed.gitlab_work_branch,
             "create_mr": not parsed.gitlab_no_mr,
             "use_ssh": parsed.gitlab_ssh,
+        }
+
+    if has_github:
+        gh_url = parsed.github_url or "https://github.com"
+        token = load_github_token(gh_url)
+        if not token:
+            print(
+                "Fehler: Kein GitHub-Token gefunden. Setze GITHUB_TOKEN (oder GH_TOKEN), melde dich per 'gh auth login' an oder speichere das Token über die GUI.",
+                file=sys.stderr,
+            )
+            return 1
+        context["github"] = {
+            "enabled": True,
+            "url": gh_url,
+            "token": token,
+            "owner": parsed.github_owner,
+            "visibility": parsed.github_visibility,
+            "work_branch": parsed.github_work_branch,
+            "create_pr": not parsed.github_no_pr,
+            "use_ssh": parsed.github_ssh,
         }
 
     if parsed.preview:

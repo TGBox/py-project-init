@@ -251,6 +251,38 @@ class TestMainWindow(unittest.TestCase):
         self.window.path_input.setText("C:/projects")
         self.assertIn("quantum-leap", self.window.summary_path_label.text())
 
+    def test_remote_provider_switching(self):
+        """Verifies switching between None, GitLab, and GitHub in UI and context."""
+        # 1. Default: None
+        self.window.remote_none_rb.setChecked(True)
+        self.assertTrue(self.window.gitlab_container.isHidden())
+        self.assertTrue(self.window.github_container.isHidden())
+        self.assertNotIn("GitLab", self.window.summary_features_label.text())
+        self.assertNotIn("GitHub", self.window.summary_features_label.text())
+        ctx_none = self.window._collect_context()
+        self.assertFalse(ctx_none["gitlab"]["enabled"])
+        self.assertFalse(ctx_none["github"]["enabled"])
+
+        # 2. GitLab selected
+        self.window.remote_gitlab_rb.setChecked(True)
+        self.assertFalse(self.window.gitlab_container.isHidden())
+        self.assertTrue(self.window.github_container.isHidden())
+        self.assertIn("GitLab", self.window.summary_features_label.text())
+        ctx_gl = self.window._collect_context()
+        self.assertTrue(ctx_gl["gitlab"]["enabled"])
+        self.assertFalse(ctx_gl["github"]["enabled"])
+
+        # 3. GitHub selected
+        self.window.remote_github_rb.setChecked(True)
+        self.assertTrue(self.window.gitlab_container.isHidden())
+        self.assertFalse(self.window.github_container.isHidden())
+        self.assertIn("GitHub", self.window.summary_features_label.text())
+        self.window.github_owner_input.setText("test-org")
+        ctx_gh = self.window._collect_context()
+        self.assertFalse(ctx_gh["gitlab"]["enabled"])
+        self.assertTrue(ctx_gh["github"]["enabled"])
+        self.assertEqual(ctx_gh["github"]["owner"], "test-org")
+
 
 if __name__ == "__main__":
     unittest.main()
