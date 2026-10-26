@@ -11,10 +11,23 @@ from PySide6.QtWidgets import (
     QLineEdit, QComboBox, QCheckBox, QPushButton, QTextEdit,
     QFileDialog, QLabel, QGroupBox, QMessageBox, QScrollArea,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QTabWidget, QSplitter, QFrame
+    QTabWidget, QSplitter, QFrame, QRadioButton, QButtonGroup
 )
 from py_project_init.core.generator import TemplateManager
-from py_project_init.core.gitlab import GitLabClient, GitLabError, load_token, save_token, delete_token
+from py_project_init.core.github import (
+    GitHubClient,
+    GitHubError,
+    load_token as load_github_token,
+    save_token as save_github_token,
+    delete_token as delete_github_token,
+)
+from py_project_init.core.gitlab import (
+    GitLabClient,
+    GitLabError,
+    load_token as load_gitlab_token,
+    save_token as save_gitlab_token,
+    delete_token as delete_gitlab_token,
+)
 from py_project_init.ui.styles import DARK_THEME
 from py_project_init.ui.dialogs import PreviewDialog, RetrofitDialog, CreateTemplateDialog
 
@@ -347,23 +360,49 @@ class MainWindow(QMainWindow):
         tab2_layout.setContentsMargins(14, 14, 14, 14)
         tab2_layout.setSpacing(14)
 
-        # GitLab Box
-        self.gitlab_box = QGroupBox("GitLab-Anbindung (optional)")
-        gl_layout = QVBoxLayout(self.gitlab_box)
-        self.gitlab_enable_cb = QCheckBox("Projekt auf GitLab anlegen und initialen Commit pushen")
-        self.gitlab_enable_cb.setStyleSheet("font-weight: 600; color: #7aa2f7;")
-        self.gitlab_enable_cb.setToolTip(
-            "Legt das Projekt per API inkl. README an, damit GitLab den Default-Branch selbst erstellt.\n"
-            "Der initiale Commit wird darauf aufgesetzt, auf den Arbeits-Branch gepusht und per Merge Request\n"
-            "in den Default-Branch eingebracht – funktioniert auch mit Developer-Rechten."
-        )
-        gl_layout.addWidget(self.gitlab_enable_cb)
+        # ── Git-Remote Box (GitLab / GitHub) ──
+        self.remote_box = QGroupBox("Git-Remote-Anbindung (optional)")
+        remote_layout = QVBoxLayout(self.remote_box)
 
+        # Provider-Auswahl
+        provider_row = QHBoxLayout()
+        provider_lbl = QLabel("Remote-Plattform:")
+        provider_lbl.setMinimumWidth(130)
+        provider_lbl.setStyleSheet("font-weight: 600; color: #7aa2f7;")
+        provider_row.addWidget(provider_lbl)
+
+        self.remote_none_rb = QRadioButton("Keine")
+        self.remote_none_rb.setChecked(True)
+        self.remote_gitlab_rb = QRadioButton("🦊 GitLab")
+        self.remote_github_rb = QRadioButton("🐙 GitHub")
+
+        self.remote_provider_group = QButtonGroup(self)
+        self.remote_provider_group.addButton(self.remote_none_rb, 0)
+        self.remote_provider_group.addButton(self.remote_gitlab_rb, 1)
+        self.remote_provider_group.addButton(self.remote_github_rb, 2)
+
+        provider_row.addWidget(self.remote_none_rb)
+        provider_row.addWidget(self.remote_gitlab_rb)
+        provider_row.addWidget(self.remote_github_rb)
+        provider_row.addStretch()
+        remote_layout.addLayout(provider_row)
+
+        # Gemeinsamer Default-Branch
+        def_branch_row = QHBoxLayout()
+        def_branch_lbl = QLabel("Default-Branch:")
+        def_branch_lbl.setMinimumWidth(130)
+        def_branch_row.addWidget(def_branch_lbl)
+        self.default_branch_input = QLineEdit("main")
+        self.default_branch_input.setToolTip("Default-Branch des Projekts (wird auch ohne Remote für 'git init -b' verwendet).")
+        def_branch_row.addWidget(self.default_branch_input, 1)
+        remote_layout.addLayout(def_branch_row)
+
+        # ── GitLab Container ──
         self.gitlab_container = QWidget()
         gl_form = QVBoxLayout(self.gitlab_container)
-        gl_form.setContentsMargins(12, 4, 4, 4)
+        gl_form.setContentsMargins(0, 6, 0, 0)
 
-        def _row(label: str, widget: QWidget) -> QHBoxLayout:
+        def _gl_row(label: str, widget: QWidget) -> QHBoxLayout:
             row = QHBoxLayout()
             lbl = QLabel(label)
             lbl.setMinimumWidth(130)
@@ -374,20 +413,20 @@ class MainWindow(QMainWindow):
 
         self.gitlab_url_input = QLineEdit()
         self.gitlab_url_input.setPlaceholderText("https://gitlab.data-al.de")
-        _row("GitLab-URL:", self.gitlab_url_input)
+        _gl_row("GitLab-URL:", self.gitlab_url_input)
 
         self.gitlab_namespace_input = QLineEdit()
         self.gitlab_namespace_input.setPlaceholderText("z. B. development (leer = persönlicher Namespace)")
-        _row("Gruppe/Namespace:", self.gitlab_namespace_input)
+        _gl_row("Gruppe/Namespace:", self.gitlab_namespace_input)
 
         self.gitlab_token_input = QLineEdit()
         self.gitlab_token_input.setEchoMode(QLineEdit.Password)
         self.gitlab_token_input.setPlaceholderText("Personal Access Token mit Scope 'api'")
-        token_row = _row("Access Token:", self.gitlab_token_input)
+        gl_token_row = _gl_row("Access Token:", self.gitlab_token_input)
         self.gitlab_test_btn = QPushButton("Verbindung testen")
         self.gitlab_test_btn.setObjectName("toolButton")
         self.gitlab_test_btn.clicked.connect(self._test_gitlab_connection)
-        token_row.addWidget(self.gitlab_test_btn)
+        gl_token_row.addWidget(self.gitlab_test_btn)
 
         self.gitlab_save_token_cb = QCheckBox("Token sicher im Windows-Anmeldeinformationsspeicher merken")
         self.gitlab_save_token_cb.setChecked(True)
@@ -396,26 +435,90 @@ class MainWindow(QMainWindow):
         self.gitlab_visibility_combo = QComboBox()
         for label, value in [("Privat", "private"), ("Intern", "internal"), ("Öffentlich", "public")]:
             self.gitlab_visibility_combo.addItem(label, value)
-        _row("Sichtbarkeit:", self.gitlab_visibility_combo)
-
-        self.default_branch_input = QLineEdit("main")
-        self.default_branch_input.setToolTip("Default-Branch des Projekts (wird auch ohne GitLab für 'git init -b' verwendet).")
-        _row("Default-Branch:", self.default_branch_input)
+        _gl_row("Sichtbarkeit:", self.gitlab_visibility_combo)
 
         self.gitlab_work_branch_input = QLineEdit("develop")
         self.gitlab_work_branch_input.setToolTip("Auf diesen Branch wird der initiale Commit gepusht (der Default-Branch ist geschützt).")
-        _row("Arbeits-Branch:", self.gitlab_work_branch_input)
+        _gl_row("Arbeits-Branch:", self.gitlab_work_branch_input)
 
         self.gitlab_mr_cb = QCheckBox("Merge Request Arbeits-Branch → Default-Branch automatisch anlegen")
         self.gitlab_mr_cb.setChecked(True)
         gl_form.addWidget(self.gitlab_mr_cb)
 
-        gl_layout.addWidget(self.gitlab_container)
-        self.gitlab_container.setEnabled(False)
-        self.gitlab_enable_cb.toggled.connect(self.gitlab_container.setEnabled)
-        self.gitlab_enable_cb.toggled.connect(lambda _: self._update_summary())
+        self.gitlab_ssh_cb = QCheckBox("SSH- statt HTTPS-URL für Git-Remote verwenden")
+        self.gitlab_ssh_cb.setChecked(False)
+        gl_form.addWidget(self.gitlab_ssh_cb)
+
         self.gitlab_url_input.editingFinished.connect(self._load_gitlab_token)
-        tab2_layout.addWidget(self.gitlab_box)
+        remote_layout.addWidget(self.gitlab_container)
+
+        # ── GitHub Container ──
+        self.github_container = QWidget()
+        gh_form = QVBoxLayout(self.github_container)
+        gh_form.setContentsMargins(0, 6, 0, 0)
+
+        def _gh_row(label: str, widget: QWidget) -> QHBoxLayout:
+            row = QHBoxLayout()
+            lbl = QLabel(label)
+            lbl.setMinimumWidth(130)
+            row.addWidget(lbl)
+            row.addWidget(widget, 1)
+            gh_form.addLayout(row)
+            return row
+
+        self.github_url_input = QLineEdit("https://github.com")
+        self.github_url_input.setPlaceholderText("https://github.com (oder GitHub Enterprise URL)")
+        _gh_row("GitHub-Instanz:", self.github_url_input)
+
+        self.github_owner_input = QLineEdit()
+        self.github_owner_input.setPlaceholderText("z. B. my-org (leer = persönlicher Account)")
+        _gh_row("Owner / Org:", self.github_owner_input)
+
+        self.github_token_input = QLineEdit()
+        self.github_token_input.setEchoMode(QLineEdit.Password)
+        self.github_token_input.setPlaceholderText("Personal Access Token mit Scope 'repo'")
+        gh_token_row = _gh_row("Access Token:", self.github_token_input)
+        self.github_test_btn = QPushButton("Verbindung testen")
+        self.github_test_btn.setObjectName("toolButton")
+        self.github_test_btn.clicked.connect(self._test_github_connection)
+        gh_token_row.addWidget(self.github_test_btn)
+
+        self.github_save_token_cb = QCheckBox("Token sicher im Windows-Anmeldeinformationsspeicher merken")
+        self.github_save_token_cb.setChecked(True)
+        gh_form.addWidget(self.github_save_token_cb)
+
+        self.github_visibility_combo = QComboBox()
+        for label, value in [("Privat", "private"), ("Öffentlich", "public"), ("Intern", "internal")]:
+            self.github_visibility_combo.addItem(label, value)
+        _gh_row("Sichtbarkeit:", self.github_visibility_combo)
+
+        self.github_work_branch_input = QLineEdit("develop")
+        self.github_work_branch_input.setToolTip("Auf diesen Branch wird der initiale Commit gepusht (der Default-Branch bleibt geschützt).")
+        _gh_row("Arbeits-Branch:", self.github_work_branch_input)
+
+        self.github_pr_cb = QCheckBox("Pull Request Arbeits-Branch → Default-Branch automatisch anlegen")
+        self.github_pr_cb.setChecked(True)
+        gh_form.addWidget(self.github_pr_cb)
+
+        self.github_ssh_cb = QCheckBox("SSH- statt HTTPS-URL für Git-Remote verwenden")
+        self.github_ssh_cb.setChecked(False)
+        gh_form.addWidget(self.github_ssh_cb)
+
+        self.github_url_input.editingFinished.connect(self._load_github_token)
+        remote_layout.addWidget(self.github_container)
+
+        # Initial Container-Sichtbarkeit
+        self.gitlab_container.setVisible(False)
+        self.github_container.setVisible(False)
+        self.remote_none_rb.toggled.connect(self._on_remote_provider_changed)
+        self.remote_gitlab_rb.toggled.connect(self._on_remote_provider_changed)
+        self.remote_github_rb.toggled.connect(self._on_remote_provider_changed)
+
+        # Aliase für Rückwärtskompatibilität
+        self.gitlab_box = self.remote_box
+        self.gitlab_enable_cb = self.remote_gitlab_rb
+
+        tab2_layout.addWidget(self.remote_box)
 
         # Git-Hooks Box
         self.git_hooks_box = QGroupBox("Git-Hooks Integration (.git/hooks/)")
@@ -486,7 +589,7 @@ class MainWindow(QMainWindow):
         tab2_layout.addWidget(self.agent_box)
         tab2_layout.addStretch()
 
-        self.tabs.addTab(tab2_scroll, "🛡️ GitLab, Git-Hooks & Agenten")
+        self.tabs.addTab(tab2_scroll, "🌐 Git-Remote, Git-Hooks & Agenten")
 
         # ── TAB 3: ⚙️ Metadaten & Skripte ──
         tab3_scroll = QScrollArea()
@@ -754,8 +857,10 @@ class MainWindow(QMainWindow):
         else:
             features.append("🤖 Agents inaktiv")
 
-        if hasattr(self, "gitlab_enable_cb") and self.gitlab_enable_cb.isChecked():
+        if hasattr(self, "remote_gitlab_rb") and self.remote_gitlab_rb.isChecked():
             features.append("🦊 GitLab")
+        elif hasattr(self, "remote_github_rb") and self.remote_github_rb.isChecked():
+            features.append("🐙 GitHub")
 
         self.summary_features_label.setText(" • ".join(features))
 
@@ -1293,8 +1398,16 @@ class MainWindow(QMainWindow):
         if idx >= 0:
             self.license_combo.setCurrentIndex(idx)
 
-        # Restore GitLab settings (token comes from the OS credential store, never from QSettings)
-        self.gitlab_enable_cb.setChecked(self.settings.value("gitlab_enabled", False, type=bool))
+        # Restore Remote settings (GitLab / GitHub)
+        gl_enabled = self.settings.value("gitlab_enabled", False, type=bool)
+        gh_enabled = self.settings.value("github_enabled", False, type=bool)
+        if gl_enabled:
+            self.remote_gitlab_rb.setChecked(True)
+        elif gh_enabled:
+            self.remote_github_rb.setChecked(True)
+        else:
+            self.remote_none_rb.setChecked(True)
+
         self.gitlab_url_input.setText(self.settings.value("gitlab_url", ""))
         self.gitlab_namespace_input.setText(self.settings.value("gitlab_namespace", ""))
         idx = self.gitlab_visibility_combo.findData(self.settings.value("gitlab_visibility", "private"))
@@ -1303,7 +1416,20 @@ class MainWindow(QMainWindow):
         self.default_branch_input.setText(self.settings.value("default_branch", "main"))
         self.gitlab_work_branch_input.setText(self.settings.value("gitlab_work_branch", "develop"))
         self.gitlab_mr_cb.setChecked(self.settings.value("gitlab_create_mr", True, type=bool))
+        self.gitlab_ssh_cb.setChecked(self.settings.value("gitlab_use_ssh", False, type=bool))
         self._load_gitlab_token()
+
+        self.github_url_input.setText(self.settings.value("github_url", "https://github.com"))
+        self.github_owner_input.setText(self.settings.value("github_owner", ""))
+        idx_gh = self.github_visibility_combo.findData(self.settings.value("github_visibility", "private"))
+        if idx_gh >= 0:
+            self.github_visibility_combo.setCurrentIndex(idx_gh)
+        self.github_work_branch_input.setText(self.settings.value("github_work_branch", "develop"))
+        self.github_pr_cb.setChecked(self.settings.value("github_create_pr", True, type=bool))
+        self.github_ssh_cb.setChecked(self.settings.value("github_use_ssh", False, type=bool))
+        self._load_github_token()
+
+        self._on_remote_provider_changed()
 
         # Restore scripts
         self._load_scripts_settings()
@@ -1323,6 +1449,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("author_email", self.email_input.text().strip())
         self.settings.setValue("license", self.license_combo.currentText())
         self._save_gitlab_settings()
+        self._save_github_settings()
         self._save_scripts_settings()
         current_tpl = self.template_combo.currentData()
         if current_tpl:
@@ -1372,13 +1499,24 @@ class MainWindow(QMainWindow):
             ],
             "default_branch": self.default_branch_input.text().strip() or "main",
             "gitlab": {
-                "enabled": self.gitlab_enable_cb.isChecked(),
+                "enabled": self.remote_gitlab_rb.isChecked(),
                 "url": self.gitlab_url_input.text().strip(),
                 "token": self.gitlab_token_input.text().strip(),
                 "namespace": self.gitlab_namespace_input.text().strip(),
                 "visibility": self.gitlab_visibility_combo.currentData(),
                 "work_branch": self.gitlab_work_branch_input.text().strip(),
                 "create_mr": self.gitlab_mr_cb.isChecked(),
+                "use_ssh": self.gitlab_ssh_cb.isChecked(),
+            },
+            "github": {
+                "enabled": self.remote_github_rb.isChecked(),
+                "url": self.github_url_input.text().strip() or "https://github.com",
+                "token": self.github_token_input.text().strip(),
+                "owner": self.github_owner_input.text().strip(),
+                "visibility": self.github_visibility_combo.currentData(),
+                "work_branch": self.github_work_branch_input.text().strip(),
+                "create_pr": self.github_pr_cb.isChecked(),
+                "use_ssh": self.github_ssh_cb.isChecked(),
             },
         }
 
@@ -1577,26 +1715,38 @@ class MainWindow(QMainWindow):
 
     # ── GitLab ──────────────────────────────────────────────────────────────
 
+    def _on_remote_provider_changed(self):
+        is_gl = self.remote_gitlab_rb.isChecked()
+        is_gh = self.remote_github_rb.isChecked()
+        self.gitlab_container.setVisible(is_gl)
+        self.github_container.setVisible(is_gh)
+        if is_gl:
+            self._load_gitlab_token()
+        elif is_gh:
+            self._load_github_token()
+        self._update_summary()
+
     def _load_gitlab_token(self):
         url = self.gitlab_url_input.text().strip()
         if url and not self.gitlab_token_input.text().strip():
-            self.gitlab_token_input.setText(load_token(url))
+            self.gitlab_token_input.setText(load_gitlab_token(url))
 
     def _save_gitlab_settings(self):
-        self.settings.setValue("gitlab_enabled", self.gitlab_enable_cb.isChecked())
+        self.settings.setValue("gitlab_enabled", self.remote_gitlab_rb.isChecked())
         self.settings.setValue("gitlab_url", self.gitlab_url_input.text().strip())
         self.settings.setValue("gitlab_namespace", self.gitlab_namespace_input.text().strip())
         self.settings.setValue("gitlab_visibility", self.gitlab_visibility_combo.currentData())
         self.settings.setValue("default_branch", self.default_branch_input.text().strip() or "main")
         self.settings.setValue("gitlab_work_branch", self.gitlab_work_branch_input.text().strip())
         self.settings.setValue("gitlab_create_mr", self.gitlab_mr_cb.isChecked())
+        self.settings.setValue("gitlab_use_ssh", self.gitlab_ssh_cb.isChecked())
         url = self.gitlab_url_input.text().strip()
         token = self.gitlab_token_input.text().strip()
         if url and token and self.gitlab_save_token_cb.isChecked():
-            if not save_token(url, token):
+            if not save_gitlab_token(url, token):
                 self.statusBar().showMessage("Hinweis: Token konnte nicht im Anmeldeinformationsspeicher abgelegt werden.", 5000)
         elif url and not self.gitlab_save_token_cb.isChecked():
-            delete_token(url)
+            delete_gitlab_token(url)
 
     def _test_gitlab_connection(self):
         url = self.gitlab_url_input.text().strip()
@@ -1620,6 +1770,59 @@ class MainWindow(QMainWindow):
         QApplication.restoreOverrideCursor()
         self._save_gitlab_settings()
         QMessageBox.information(self, "GitLab-Verbindung", msg)
+
+    # ── GitHub ──────────────────────────────────────────────────────────────
+
+    def _load_github_token(self):
+        url = self.github_url_input.text().strip() or "https://github.com"
+        if not self.github_token_input.text().strip():
+            token = load_github_token(url)
+            if token:
+                self.github_token_input.setText(token)
+
+    def _save_github_settings(self):
+        self.settings.setValue("github_enabled", self.remote_github_rb.isChecked())
+        self.settings.setValue("github_url", self.github_url_input.text().strip())
+        self.settings.setValue("github_owner", self.github_owner_input.text().strip())
+        self.settings.setValue("github_visibility", self.github_visibility_combo.currentData())
+        self.settings.setValue("github_work_branch", self.github_work_branch_input.text().strip())
+        self.settings.setValue("github_create_pr", self.github_pr_cb.isChecked())
+        self.settings.setValue("github_use_ssh", self.github_ssh_cb.isChecked())
+        url = self.github_url_input.text().strip() or "https://github.com"
+        token = self.github_token_input.text().strip()
+        if url and token and self.github_save_token_cb.isChecked():
+            if not save_github_token(url, token):
+                self.statusBar().showMessage("Hinweis: GitHub-Token konnte nicht im Anmeldeinformationsspeicher abgelegt werden.", 5000)
+        elif url and not self.github_save_token_cb.isChecked():
+            delete_github_token(url)
+
+    def _test_github_connection(self):
+        url = self.github_url_input.text().strip() or "https://github.com"
+        token = self.github_token_input.text().strip()
+        if not token:
+            QMessageBox.warning(self, "GitHub", "Bitte ein GitHub Personal Access Token eintragen.")
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            client = GitHubClient(url, token, timeout=10)
+            user = client.current_user()
+            user_login = user.get("login", "")
+            user_name = user.get("name") or user_login
+            msg = f"✔ Erfolgreich angemeldet als {user_name} (@{user_login})."
+            owner = self.github_owner_input.text().strip()
+            if owner and owner.lower() != user_login.lower():
+                try:
+                    org_info = client._request("GET", f"/orgs/{client._enc(owner)}")
+                    msg += f"\n✔ Organisation '{org_info.get('login', owner)}' gefunden und zugänglich."
+                except GitHubError as org_err:
+                    msg += f"\n⚠️ Organisation '{owner}' konnte nicht verifiziert werden: {org_err}"
+        except GitHubError as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self, "GitHub-Verbindung fehlgeschlagen", str(e))
+            return
+        QApplication.restoreOverrideCursor()
+        self._save_github_settings()
+        QMessageBox.information(self, "GitHub-Verbindung", msg)
 
     # ── Dateimanager & Launcher ─────────────────────────────────────────────
 

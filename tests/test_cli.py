@@ -61,5 +61,29 @@ class TestCLI(unittest.TestCase):
             self.assertIn("Vorschau:", output)
 
 
+    def test_cli_github_and_gitlab_mutually_exclusive(self):
+        """Verifies error when both GitLab and GitHub are specified."""
+        err = io.StringIO()
+        with patch("sys.stderr", err):
+            code = run_cli([
+                "mutually_exclusive_app",
+                "--gitlab-url", "https://gitlab.example.com",
+                "--github",
+            ])
+        self.assertEqual(code, 1)
+        self.assertIn("nicht beides gleichzeitig", err.getvalue())
+
+    def test_cli_github_missing_token(self):
+        """Verifies error when GitHub is requested but no token is found."""
+        err = io.StringIO()
+        with patch("py_project_init.cli.load_github_token", return_value=""), patch("sys.stderr", err):
+            code = run_cli([
+                "github_no_token_app",
+                "--github",
+            ])
+        self.assertEqual(code, 1)
+        self.assertIn("Kein GitHub-Token gefunden", err.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

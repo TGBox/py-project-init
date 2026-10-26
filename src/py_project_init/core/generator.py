@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 import yaml
 from jinja2 import Environment, FileSystemLoader
+from py_project_init.core.github import GitHubClient, GitHubError
 from py_project_init.core.gitlab import GitLabClient, GitLabError
 
 
@@ -22,6 +23,7 @@ def _summarize_output(text: str, max_len: int = 240) -> str:
 class TemplateManager:
     # Replaceable in tests (fake client without network access)
     gitlab_client_factory = GitLabClient
+    github_client_factory = GitHubClient
 
     def __init__(
         self,
@@ -286,7 +288,7 @@ class TemplateManager:
             elif res.stdout.strip():
                 log_callback(res.stdout.strip())
 
-        # 7. Optional: GitLab-Projekt anlegen/verbinden (vor dem Commit, damit dieser auf dem
+        # 7. Optional: GitLab/GitHub-Projekt anlegen/verbinden (vor dem Commit, damit dieser auf dem
         #    serverseitigen Default-Branch aufsetzt)
         gitlab_cfg = context.get("gitlab") or {}
         gitlab_state = None
@@ -294,15 +296,24 @@ class TemplateManager:
             check_cancel()
             gitlab_state = self._prepare_gitlab_remote(target_dir, context, log_callback, problems)
 
+        github_cfg = context.get("github") or {}
+        github_state = None
+        if github_cfg.get("enabled"):
+            check_cancel()
+            github_state = self._prepare_github_remote(target_dir, context, log_callback, problems)
+
         # 8. Initialer Commit mit --no-verify
         check_cancel()
         commit_problems = self._commit_initial(target_dir, log_callback, is_cancelled=is_cancelled)
         problems.extend(commit_problems)
 
-        # 9. Optional: zu GitLab pushen und Merge Request anlegen
+        # 9. Optional: zu GitLab/GitHub pushen und Merge/Pull Request anlegen
         if gitlab_state and not commit_problems:
             check_cancel()
             problems.extend(self._push_to_gitlab(target_dir, gitlab_state, log_callback))
+        elif github_state and not commit_problems:
+            check_cancel()
+            problems.extend(self._push_to_github(target_dir, github_state, log_callback))
 
         return problems
 
@@ -433,6 +444,129 @@ class TemplateManager:
             except GitLabError as e:
                 log_callback(f"✖ Merge Request konnte nicht angelegt werden: {e}")
                 problems.append(f"GitLab Merge Request: {e}")
+        return problems
+
+    # ── GitHub ──────────────────────────────────────────────────────────────
+
+    def _prepare_github_remote(self, target_dir: Path, context: dict, log_callback, problems: list[str]) -> dict | None:
+        """Creates (or reuses an empty) GitHub repository, adds 'origin' and bases the local branches on it.
+
+        Returns the state needed for pushing, or None if the GitHub step failed.
+        """
+        cfg = context["github"]
+        name = context["project_name"]
+        default_branch = context.get("default_branch") or "main"
+        work_branch = (cfg.get("work_branch") or "").strip() or default_branch
+        owner = (cfg.get("owner") or cfg.get("namespace") or "").strip().strip("/")
+
+        try:
+            client = self.github_client_factory(cfg.get("url", ""), cfg.get("token", ""))
+            if not owner:
+                owner = client.current_user().get("login", "")
+            full_path = f"{owner}/{name}"
+            repo = client.get_repo(owner, name)
+            if repo and not repo.get("empty_repo") and repo.get("size", 0) > 0:
+                msg = (f"GitHub-Repository '{full_path}' existiert bereits und enthält Commits – "
+                       "es wird nicht verändert. Bitte anderen Namen wählen oder manuell verbinden.")
+                log_callback(f"✖ {msg}")
+                problems.append(f"GitHub: {msg}")
+                return None
+            if repo:
+                log_callback(f"GitHub: Verwende vorhandenes leeres Repository {repo.get('html_url', full_path)}")
+            else:
+                log_callback(f"GitHub: Lege Repository '{full_path}' an...")
+                repo = client.create_repo(
+                    name,
+                    owner=cfg.get("owner"),
+                    default_branch=default_branch,
+                    visibility=cfg.get("visibility") or "private",
+                    description=context.get("description", ""),
+                )
+                log_callback(f"Erfolg: GitHub-Repository angelegt: {repo.get('html_url', full_path)}")
+        except GitHubError as e:
+            log_callback(f"✖ GitHub-Fehler: {e}")
+            problems.append(f"GitHub: {e}")
+            return None
+
+        remote_url = repo.get("ssh_url") if cfg.get("use_ssh") else (repo.get("clone_url") or repo.get("html_url"))
+        res = self._git(target_dir, "remote", "add", "origin", remote_url)
+        if res.returncode != 0:
+            res = self._git(target_dir, "remote", "set-url", "origin", remote_url)
+        log_callback(f"Git-Remote 'origin' gesetzt: {remote_url}")
+
+        remote_default = repo.get("default_branch")
+        based_on_remote = False
+        if remote_default and not repo.get("empty_repo"):
+            default_branch = remote_default
+            res = self._git(target_dir, "fetch", "origin", default_branch)
+            if res.returncode != 0:
+                output = res.stderr.strip() or res.stdout.strip()
+                log_callback(f"✖ git fetch fehlgeschlagen: {output}")
+                problems.append(f"GitHub 'git fetch': {_summarize_output(output)}")
+                return None
+            # Local branches start at the server's initial README commit; the project commit goes on top.
+            base = f"refs/remotes/origin/{default_branch}"
+            self._git(target_dir, "update-ref", f"refs/heads/{default_branch}", base)
+            if work_branch != default_branch:
+                self._git(target_dir, "update-ref", f"refs/heads/{work_branch}", base)
+            self._git(target_dir, "symbolic-ref", "HEAD", f"refs/heads/{work_branch}")
+            self._git(target_dir, "branch", f"--set-upstream-to=origin/{default_branch}", default_branch)
+            based_on_remote = True
+            log_callback(f"Lokale Branches basieren auf origin/{default_branch}; Arbeits-Branch: {work_branch}")
+
+        return {
+            "client": client,
+            "project": repo,
+            "owner": owner,
+            "default_branch": default_branch,
+            "work_branch": work_branch,
+            "based_on_remote": based_on_remote,
+            "create_pr": bool(cfg.get("create_pr", True)),
+            "project_name": name,
+        }
+
+    def _push_to_github(self, target_dir: Path, state: dict, log_callback) -> list[str]:
+        """Pushes the initial commit and opens a pull request work_branch -> default_branch."""
+        problems: list[str] = []
+        default_branch, work_branch = state["default_branch"], state["work_branch"]
+
+        if state["based_on_remote"]:
+            branches = [work_branch]
+        else:
+            # Empty existing repository: the first push has to create the default branch
+            current = self._git(target_dir, "symbolic-ref", "--short", "HEAD").stdout.strip() or default_branch
+            if current != default_branch:
+                self._git(target_dir, "branch", "-m", current, default_branch)
+            branches = [default_branch]
+            if work_branch != default_branch:
+                self._git(target_dir, "branch", work_branch)
+                self._git(target_dir, "symbolic-ref", "HEAD", f"refs/heads/{work_branch}")
+                branches.append(work_branch)
+
+        for branch in branches:
+            log_callback(f"Pushe '{branch}' nach GitHub...")
+            res = self._git(target_dir, "push", "--no-verify", "-u", "origin", branch)
+            if res.returncode != 0:
+                output = res.stderr.strip() or res.stdout.strip()
+                log_callback(f"✖ Push von '{branch}' fehlgeschlagen: {output}")
+                problems.append(f"GitHub-Push '{branch}': {_summarize_output(output)}")
+                return problems
+            log_callback(f"Erfolg: git push -u origin {branch}")
+
+        # A PR only makes sense if the work branch carries the project commit on top of the server's default branch
+        if state["create_pr"] and state["based_on_remote"] and work_branch != default_branch:
+            try:
+                pr = state["client"].create_pull_request(
+                    state["owner"],
+                    state["project_name"],
+                    work_branch,
+                    default_branch,
+                    f"Initiales Projekt-Setup: {state['project_name']}",
+                )
+                log_callback(f"Pull Request angelegt: {pr.get('html_url', '')}")
+            except GitHubError as e:
+                log_callback(f"✖ Pull Request konnte nicht angelegt werden: {e}")
+                problems.append(f"GitHub Pull Request: {e}")
         return problems
 
     def _should_include(self, rel_path: Path, filename: str, conditions: list[dict], context: dict) -> bool:

@@ -2,7 +2,8 @@
 
 ## SemVer v3.0.1
 
-- 2026-10-26 (3a23eb5): feat: add new plan for github integration
+- 2026-10-26 (052c88b): feat: add option to directly create the external repo on github as well, utilizing PATs, feat: allow for branching in the same way as for gitlab, feat: add cli options for all new actions, feat: add new tests and update README.md
+- 2026-10-26 (d9c57c1): feat: add new plan for github integration
 - 2026-10-25 (8345867): fix: adjust project templates to remove unused import statements from the file templates, to avoid an initial push directly failing the linter check in an external repo
 - 2026-10-24 (3381342): feat: add new unity game dev template
 - 2026-10-20 (900fa79): fix: update git hooks to show the semver before bumping it and again afterwards so the user sees exactly, what the current version is
