@@ -546,6 +546,19 @@ class TestTemplateManager(unittest.TestCase):
                 ["git", "config", "--get", "push.followTags"], cwd=proj_dir, text=True
             ).strip()
             self.assertEqual(followtags_val, "true")
+            smarttests_val = subprocess.check_output(
+                ["git", "config", "--get", "hooks.smarttests"], cwd=proj_dir, text=True
+            ).strip()
+            self.assertEqual(smarttests_val, "true")
+
+            # Retrofit with smart tests disabled
+            self.manager.retrofit_hooks(
+                proj_dir, ["pre-commit"], enable_smart_tests=False
+            )
+            smarttests_disabled_val = subprocess.check_output(
+                ["git", "config", "--get", "hooks.smarttests"], cwd=proj_dir, text=True
+            ).strip()
+            self.assertEqual(smarttests_disabled_val, "false")
 
             # 2. Retrofit agent configs
             self.manager.retrofit_agent_configs(

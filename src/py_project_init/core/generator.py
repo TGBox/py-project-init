@@ -194,7 +194,14 @@ class TemplateManager:
             check_cancel()
             selected_hooks = context.get("selected_git_hooks", [])
             enable_autotag = context.get("enable_git_tags", False)
-            self._install_git_hooks(target_dir, selected_hooks, log_callback, enable_autotag=enable_autotag)
+            enable_smart_tests = context.get("enable_smart_tests", True)
+            self._install_git_hooks(
+                target_dir,
+                selected_hooks,
+                log_callback,
+                enable_autotag=enable_autotag,
+                enable_smart_tests=enable_smart_tests,
+            )
 
         # 4. Agenten-Konfiguration (.agents/ & AGENTS.md)
         if context.get("enable_agent_configs", False):
@@ -618,9 +625,10 @@ class TemplateManager:
         target_dir: Path,
         selected_hooks: list[str],
         log_callback,
-        enable_autotag: bool = False
+        enable_autotag: bool = False,
+        enable_smart_tests: bool = True,
     ):
-        """Copies selected git hooks to .git/hooks/, sets executable permissions, and configures tags if enabled."""
+        """Copies selected git hooks to .git/hooks/, sets executable permissions, and configures tags/smart tests if enabled."""
         git_hooks_dir = target_dir / ".git" / "hooks"
         git_hooks_dir.mkdir(parents=True, exist_ok=True)
 
@@ -653,6 +661,28 @@ class TemplateManager:
                 log_callback("Git-Konfiguration: Automatisches Tagging (hooks.autotag & push.followTags) aktiviert.")
             except Exception as e:
                 log_callback(f"Warnung: Git-Tagging konnte nicht konfiguriert werden: {e}")
+
+        if enable_smart_tests:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.smarttests", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: Smarte Testausführung (hooks.smarttests) aktiviert.")
+            except Exception as e:
+                log_callback(f"Warnung: Smarte Testausführung konnte nicht konfiguriert werden: {e}")
+        else:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.smarttests", "false"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+            except Exception:
+                pass
 
     def _install_agent_configs(
         self,
@@ -898,11 +928,18 @@ class TemplateManager:
         target_dir: Path,
         selected_hooks: list[str],
         log_callback=print,
-        enable_autotag: bool = False
+        enable_autotag: bool = False,
+        enable_smart_tests: bool = True,
     ):
         """Retrofits git hooks into an existing project folder."""
         self._init_git_repo(target_dir, log_callback)
-        self._install_git_hooks(target_dir, selected_hooks, log_callback, enable_autotag=enable_autotag)
+        self._install_git_hooks(
+            target_dir,
+            selected_hooks,
+            log_callback,
+            enable_autotag=enable_autotag,
+            enable_smart_tests=enable_smart_tests,
+        )
 
     def retrofit_agent_configs(
         self,

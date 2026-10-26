@@ -1,4 +1,5 @@
 import io
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -40,6 +41,29 @@ class TestCLI(unittest.TestCase):
 
             pyproject_txt = (target / "pyproject.toml").read_text(encoding="utf-8")
             self.assertIn("CLI Developer", pyproject_txt)
+
+            smarttests_val = subprocess.check_output(
+                ["git", "config", "--get", "hooks.smarttests"], cwd=target, text=True
+            ).strip()
+            self.assertEqual(smarttests_val, "true")
+
+    def test_no_smart_tests_flag(self):
+        """Verifies --no-smart-tests configures hooks.smarttests to false."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out = io.StringIO()
+            with patch("sys.stdout", out):
+                code = run_cli([
+                    "no_smart_app",
+                    "-t", "python-cli",
+                    "-p", temp_dir,
+                    "--no-smart-tests",
+                ])
+            self.assertEqual(code, 0)
+            target = Path(temp_dir) / "no_smart_app"
+            smarttests_val = subprocess.check_output(
+                ["git", "config", "--get", "hooks.smarttests"], cwd=target, text=True
+            ).strip()
+            self.assertEqual(smarttests_val, "false")
 
     def test_preview_via_cli(self):
         """Verifies --preview flag prints simulated files without writing to disk."""

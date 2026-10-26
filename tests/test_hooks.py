@@ -631,6 +631,113 @@ class TestGitHooks(unittest.TestCase):
             tags = subprocess.check_output(["git", "tag", "-l"], cwd=proj, text=True).splitlines()
             self.assertIn("v0.2.1", tags)
 
+    def test_pre_push_smart_tests_behavior(self):
+        """Verifies that pre-push skips test suite when only config/docs change, and runs all tests when code changes."""
+        hook_path = self.hooks_dir / "pre-push"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.smarttests", "true"], cwd=proj, check=True)
+
+            # Initial commit with pyproject.toml, dummy test, and code
+            (proj / "pyproject.toml").write_text('[project]\nname = "smart-proj"\nversion = "0.1.0"\n', encoding="utf-8")
+            (proj / "README.md").write_text("# Smart Proj\n", encoding="utf-8")
+            (proj / "src").mkdir()
+            (proj / "src" / "main.py").write_text("print('hello')\n", encoding="utf-8")
+            (proj / "tests").mkdir()
+            (proj / "tests" / "test_sample.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "feat: initial commit"], cwd=proj, check=True)
+
+            main_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+
+            # Create a feature branch
+            subprocess.run(["git", "checkout", "-b", "feature/docs-only"], cwd=proj, check=True)
+
+            # 1. Modify ONLY config/markdown files (non-code)
+            (proj / "README.md").write_text("# Smart Proj Documentation\n", encoding="utf-8")
+            (proj / "config.yaml").write_text("debug: false\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "docs: update documentation and yaml config"], cwd=proj, check=True)
+
+            docs_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+
+            # Simulate push with stdin: pushing feature branch with base on main
+            push_input_docs = f"refs/heads/feature/docs-only {docs_sha} refs/heads/feature/docs-only {main_sha}\n"
+            res_docs = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input_docs,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertEqual(res_docs.returncode, 0, f"pre-push failed: {res_docs.stderr}")
+            self.assertIn("hooks.smarttests", res_docs.stdout)
+            self.assertIn("Keine Codedateien", res_docs.stdout)
+            self.assertIn("Test-Gate", res_docs.stdout)
+            self.assertNotIn("Führe pytest vor dem Push aus", res_docs.stdout)
+
+            # 2. Modify a code file (e.g. .py)
+            (proj / "src" / "main.py").write_text("print('hello world!')\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "fix: improve main output"], cwd=proj, check=True)
+
+            code_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+
+            push_input_code = f"refs/heads/feature/docs-only {code_sha} refs/heads/feature/docs-only {docs_sha}\n"
+            res_code = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input_code,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertEqual(res_code.returncode, 0, f"pre-push failed: {res_code.stderr}")
+            self.assertIn("Codedateien wurden", res_code.stdout)
+            self.assertNotIn("Test-Gate", res_code.stdout)
+
+            # 3. When hooks.smarttests is disabled (false), non-code changes do NOT skip test gate
+            subprocess.run(["git", "config", "hooks.smarttests", "false"], cwd=proj, check=True)
+            (proj / "README.md").write_text("# Smart Proj v3\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "docs: update again"], cwd=proj, check=True)
+
+            latest_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+            push_input_disabled = f"refs/heads/feature/docs-only {latest_sha} refs/heads/feature/docs-only {code_sha}\n"
+            res_disabled = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input_disabled,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertEqual(res_disabled.returncode, 0, f"pre-push failed: {res_disabled.stderr}")
+            self.assertNotIn("hooks.smarttests", res_disabled.stdout)
+            self.assertNotIn("Test-Gate", res_disabled.stdout)
+
+            # 4. Direct push to main is blocked
+            push_input_main = f"refs/heads/main {latest_sha} refs/heads/main {main_sha}\n"
+            res_main = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input_main,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertNotEqual(res_main.returncode, 0)
+            self.assertIn("refs/heads/main", res_main.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

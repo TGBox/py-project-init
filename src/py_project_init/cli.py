@@ -69,6 +69,11 @@ def run_cli(args: list[str] | None = None) -> int:
         help="Automatisches Git-Tagging bei Versionserhöhung nicht aktivieren",
     )
     parser.add_argument(
+        "--no-smart-tests",
+        action="store_true",
+        help="Smarte Testausführung im Pre-Push-Hook deaktivieren (stets vollständige Testsuite ausführen)",
+    )
+    parser.add_argument(
         "--no-agents",
         action="store_true",
         help="Agenten-Konfiguration (.agents/) nicht generieren",
@@ -214,6 +219,7 @@ def run_cli(args: list[str] | None = None) -> int:
             all_hooks,
             log_callback=print,
             enable_autotag=not parsed.no_tags,
+            enable_smart_tests=not parsed.no_smart_tests,
         )
         print(f"\n✔ Git-Hooks erfolgreich in '{target_path}' nachgerüstet.")
         return 0
@@ -268,6 +274,7 @@ def run_cli(args: list[str] | None = None) -> int:
         "vscode": True,
         "enable_git_hooks": not parsed.no_hooks,
         "enable_git_tags": not parsed.no_hooks and not parsed.no_tags,
+        "enable_smart_tests": not parsed.no_hooks and not parsed.no_smart_tests,
         "selected_git_hooks": all_hooks,
         "enable_agent_configs": not parsed.no_agents,
         "selected_agent_rules": recommended.get("rules", []),

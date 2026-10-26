@@ -571,10 +571,20 @@ class MainWindow(QMainWindow):
         self.git_tags_enable_cb.setToolTip("Erstellt bei SemVer-Bumps automatisch einen annotierten Tag und aktiviert 'push.followTags' für automatisches Mitpushen.")
         hooks_box_layout.addWidget(self.git_tags_enable_cb)
 
+        self.git_smart_tests_cb = QCheckBox("Smarte Testausführung im Pre-Push-Hook (hooks.smarttests)")
+        self.git_smart_tests_cb.setChecked(True)
+        self.git_smart_tests_cb.setToolTip(
+            "Führt im Pre-Push-Hook alle Tests aus, wenn Codedateien geändert wurden. "
+            "Überspringt das Test-Gate, wenn nur Konfigurations- oder Dokumentationsdateien geändert wurden."
+        )
+        hooks_box_layout.addWidget(self.git_smart_tests_cb)
+
         self.git_hooks_enable_cb.toggled.connect(self.git_hooks_container.setEnabled)
         self.git_hooks_enable_cb.toggled.connect(self.git_tags_enable_cb.setEnabled)
+        self.git_hooks_enable_cb.toggled.connect(self.git_smart_tests_cb.setEnabled)
         self.git_hooks_enable_cb.toggled.connect(lambda _: self._update_summary())
         self.git_tags_enable_cb.toggled.connect(lambda _: self._update_summary())
+        self.git_smart_tests_cb.toggled.connect(lambda _: self._update_summary())
         tab2_layout.addWidget(self.git_hooks_box)
 
         # Agenten Box
@@ -865,7 +875,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "git_hooks_enable_cb") and self.git_hooks_enable_cb.isChecked():
             hooks_count = sum(1 for cb in self.hook_checkboxes.values() if cb.isChecked())
             tags_txt = " + Tags" if hasattr(self, "git_tags_enable_cb") and self.git_tags_enable_cb.isChecked() else ""
-            features.append(f"🛡️ {hooks_count} Hooks{tags_txt}")
+            smart_txt = " + Smart-Tests" if hasattr(self, "git_smart_tests_cb") and self.git_smart_tests_cb.isChecked() else ""
+            features.append(f"🛡️ {hooks_count} Hooks{tags_txt}{smart_txt}")
         else:
             features.append("🛡️ Hooks inaktiv")
 
@@ -1506,6 +1517,7 @@ class MainWindow(QMainWindow):
             "custom_scripts": self._get_custom_scripts_dict(),
             "enable_git_hooks": self.git_hooks_enable_cb.isChecked(),
             "enable_git_tags": self.git_tags_enable_cb.isChecked() if hasattr(self, "git_tags_enable_cb") else False,
+            "enable_smart_tests": self.git_smart_tests_cb.isChecked() if hasattr(self, "git_smart_tests_cb") else True,
             "selected_git_hooks": [
                 h_id for h_id, cb in self.hook_checkboxes.items() if cb.isChecked()
             ],
