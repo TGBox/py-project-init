@@ -11,6 +11,17 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
 - **Interaktive Live-Vorschau (Virtuelles Rendern):**
   - Prüft vor dem Schreiben auf die Festplatte den kompletten virtuellen Dateibaum und gerenderte Dateiinhalte.
   - Aufrufbar per Button **👁 Live-Vorschau**, Tastaturkürzel `Strg + P` oder über das Menü **Werkzeuge**.
+- **✨ KI-Projektberater & Entscheidungshilfe (AI Advisor):**
+  - Unterstützt interaktiv bei Unentschlossenheit bezüglich Programmiersprache, Technologiestack, Vorlagenwahl, Projekttitel und Implementierungsstrategie.
+  - Aufrufbar per Button **✨ KI-Entscheidungshilfe...** in Tab 1, Tastaturkürzel `Strg + Umschalt + A` oder über das Menü **Werkzeuge → ✨ KI-Projektberater & Entscheidungshilfe...**.
+  - Unterstützt modernste LLM-Anbieter: **Google Gemini** (`gemini-2.5-flash`), **OpenAI** (`gpt-4o-mini`), **OpenRouter**, lokale Offline-Modelle via **Ollama** (`http://localhost:11434/v1`) sowie benutzerdefinierte OpenAI-kompatible Endpunkte.
+  - **Integrierte Key- & Verbindungs-Verifizierung:**
+    - Per Button **🔑 Key prüfen** (bzw. **🔌 Endpunkt prüfen**) kann die Gültigkeit des Schlüssels oder die Erreichbarkeit des lokalen Servers sofort überprüft werden, ohne erst eine Projektanfrage stellen zu müssen.
+    - Bei erfolgreicher Verifizierung wird der Key direkt im Windows-Anmeldeinformationsspeicher (`keyring`) gesichert und der Anwender wird per Dialog und Statusanzeige über den Erfolg informiert.
+  - Dynamischer Abgleich: Gleicht die Projektidee mit allen im System geladenen Vorlagen ab und liefert ein strukturiertes Ergebnis mit konkreter Vorlagen-ID, Kebab-Case Projektnamen, Begründung, Architekturplan und Bibliotheken-Empfehlungen.
+  - 1-Klick-Übernahme: Per Button **In Projekt übernehmen** werden empfohlener Projektname, Beschreibung und Vorlage direkt ins Hauptformular übertragen.
+  - Sichere Schlüsselverwaltung: API-Keys werden verschlüsselt im Windows-Anmeldeinformationsspeicher (`keyring`) abgelegt oder alternativ aus Umgebungsvariablen (`GEMINI_API_KEY`, `OPENAI_API_KEY`, etc.) bezogen.
+  - Vollbild-Unterstützung (`F11`) und Fenstermodus im Dialog gemäß GUI-Richtlinien.
 - **IDE- & Quickstart-Launcher:**
   - Nach erfolgreicher Projekterstellung stehen 1-Klick-Buttons zur Verfügung:
     - **💻 VS Code:** Öffnet das Projekt direkt in Visual Studio Code (`code <zielordner>`).

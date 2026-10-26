@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QMessageBox
 )
 from py_project_init.core.generator import TemplateManager
+from py_project_init.ui.ai_dialog import AiAdvisorDialog
 
 
 class PreviewDialog(QDialog):
