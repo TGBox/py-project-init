@@ -109,8 +109,22 @@ if [ "$SMART_TESTS" = "true" ]; then
     fi
 fi
 
-# Wenn Tests vorhanden sind, vor dem Push ausführen:
-if [ -f "pyproject.toml" ] && command -v uv >/dev/null 2>&1 && [ -d "tests" ]; then
+# -----------------------------------------------------------------------------
+# Test-Ausführung (Benutzerdefiniert via hooks.testcmd oder Auto-Erkennung):
+# -----------------------------------------------------------------------------
+TEST_CMD=$(git config hooks.testcmd 2>/dev/null || echo "")
+
+if [ -n "$TEST_CMD" ]; then
+    echo "Führe benutzerdefinierten Test-Befehl vor dem Push aus ($TEST_CMD)..."
+    set +e
+    ( eval "$TEST_CMD" )
+    TEST_EXIT=$?
+    set -e
+    if [ $TEST_EXIT -ne 0 ]; then
+        echo "FEHLER: Test-Befehl ($TEST_CMD) vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+        exit 1
+    fi
+elif [ -f "pyproject.toml" ] && command -v uv >/dev/null 2>&1 && [ -d "tests" ]; then
     if uv run pytest --version >/dev/null 2>&1; then
         echo "Führe pytest vor dem Push aus..."
         uv run pytest -q || {
@@ -153,3 +167,240 @@ elif ([ -f "*.sln" ] || compgen -G "*.sln" >/dev/null 2>&1 || compgen -G "*/*.cs
         exit 1
     }
 fi
+
+# -----------------------------------------------------------------------------
+# Tag-Erneuerung beim Push (hooks.renewtagonpush)
+# -----------------------------------------------------------------------------
+RENEW_TAG=$(git config --bool hooks.renewtagonpush 2>/dev/null || echo "false")
+if [ "$RENEW_TAG" = "true" ]; then
+    CURRENT_VERSION=""
+    PYTHON_BIN="python3"
+    if command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
+        PYTHON_BIN="python3"
+    elif command -v python >/dev/null 2>&1 && python -c "import sys" >/dev/null 2>&1; then
+        PYTHON_BIN="python"
+    elif command -v py >/dev/null 2>&1 && py -c "import sys" >/dev/null 2>&1; then
+        PYTHON_BIN="py"
+    fi
+
+    if [ -f "pyproject.toml" ]; then
+        CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import re
+try:
+    with open('pyproject.toml', 'r', encoding='utf-8') as f:
+        m = re.search(r'version\s*=\s*["\'](\d+\.\d+\.\d+)["\']', f.read())
+        if m:
+            print(m.group(1))
+except Exception:
+    pass
+EOF
+)
+    elif [ -f "package.json" ]; then
+        CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import json
+try:
+    with open('package.json', 'r', encoding='utf-8') as f:
+        print(json.load(f).get('version', ''))
+except Exception:
+    pass
+EOF
+)
+    elif [ -f "Cargo.toml" ]; then
+        CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import re
+try:
+    with open('Cargo.toml', 'r', encoding='utf-8') as f:
+        content = f.read()
+        m = re.search(r'(?ms)^\[package\].*?^version\s*=\s*["\'](\d+\.\d+\.\d+)["\']', content)
+        if not m:
+            m = re.search(r'version\s*=\s*["\'](\d+\.\d+\.\d+)["\']', content)
+        if m:
+            print(m.group(1))
+except Exception:
+    pass
+EOF
+)
+    elif [ -f "ProjectSettings/ProjectSettings.asset" ]; then
+        CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
+import re
+try:
+    with open('ProjectSettings/ProjectSettings.asset', 'r', encoding='utf-8') as f:
+        m = re.search(r'bundleVersion:\s*["\']?(\d+\.\d+\.\d+)["\']?', f.read())
+        if m:
+            print(m.group(1))
+except Exception:
+    pass
+EOF
+)
+    fi
+
+    if [ -z "$CURRENT_VERSION" ]; then
+        if [ -f "VERSION" ]; then
+            CURRENT_VERSION=$(head -n 1 VERSION 2>/dev/null | tr -d '[:space:]')
+        else
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+            if [ -n "$LATEST_TAG" ]; then
+                CURRENT_VERSION=$(echo "$LATEST_TAG" | sed -e 's/^v//')
+            fi
+        fi
+    fi
+    CURRENT_VERSION=$(echo "$CURRENT_VERSION" | sed -e 's/^v//')
+
+    if [ -n "$CURRENT_VERSION" ]; then
+        TAG_NAME="v$CURRENT_VERSION"
+        TAG_SHA=$(git rev-list -n 1 "$TAG_NAME" 2>/dev/null || echo "")
+        HEAD_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
+
+        if [ "$TAG_SHA" != "$HEAD_SHA" ]; then
+            echo "----------------------------------------------------------------"
+            echo "Tag-Erneuerung aktiv (hooks.renewtagonpush):"
+            echo "Setze Tag '$TAG_NAME' auf aktuellen HEAD ($HEAD_SHA)..."
+            git tag -a "$TAG_NAME" -m "Release $TAG_NAME" -f
+            echo "Tag '$TAG_NAME' erfolgreich auf HEAD aktualisiert."
+            echo "----------------------------------------------------------------"
+        fi
+
+        if [ "$(git config --bool push.followTags 2>/dev/null)" != "true" ]; then
+            git config push.followTags true
+        fi
+
+        if [ -n "$REMOTE" ] && [ "$REMOTE" != "" ]; then
+            git push "$REMOTE" "$TAG_NAME" --force >/dev/null 2>&1 || true
+        fi
+    fi
+fi
+
+# -----------------------------------------------------------------------------
+# Automatischer Exe-Build vor dem Push (hooks.buildexe)
+# -----------------------------------------------------------------------------
+BUILD_EXE=$(git config --bool hooks.buildexe 2>/dev/null || echo "false")
+if [ "$BUILD_EXE" = "true" ]; then
+    BUILD_CMD=$(git config hooks.buildcmd 2>/dev/null || echo "")
+
+    if [ -z "$BUILD_CMD" ]; then
+        if compgen -G "*.spec" >/dev/null 2>&1; then
+            SPEC_FILE=$(compgen -G "*.spec" | head -n 1)
+            if command -v uv >/dev/null 2>&1; then
+                BUILD_CMD="uv run pyinstaller \"$SPEC_FILE\""
+            elif command -v pyinstaller >/dev/null 2>&1; then
+                BUILD_CMD="pyinstaller \"$SPEC_FILE\""
+            fi
+        elif [ -f "pyproject.toml" ] && ( [ -f "src/main.py" ] || [ -f "main.py" ] ); then
+            ENTRY="main.py"
+            [ -f "src/main.py" ] && ENTRY="src/main.py"
+            if command -v uv >/dev/null 2>&1; then
+                BUILD_CMD="uv run pyinstaller \"$ENTRY\" --onefile"
+            elif command -v pyinstaller >/dev/null 2>&1; then
+                BUILD_CMD="pyinstaller \"$ENTRY\" --onefile"
+            fi
+        elif [ -f "Cargo.toml" ] && command -v cargo >/dev/null 2>&1; then
+            BUILD_CMD="cargo build --release"
+        elif ([ -f "*.sln" ] || compgen -G "*.sln" >/dev/null 2>&1 || compgen -G "*/*.csproj" >/dev/null 2>&1) && command -v dotnet >/dev/null 2>&1; then
+            BUILD_CMD="dotnet publish -c Release"
+        fi
+    fi
+
+    if [ -z "$BUILD_CMD" ]; then
+        echo "FEHLER: hooks.buildexe ist aktiv, aber es konnte kein Build-Befehl ermittelt werden." >&2
+        echo "Bitte 'git config hooks.buildcmd \"<befehl>\"' setzen." >&2
+        exit 1
+    fi
+
+    echo "----------------------------------------------------------------"
+    echo "Führe Exe-Build vor dem Push aus ($BUILD_CMD)..."
+    echo "----------------------------------------------------------------"
+    set +e
+    ( eval "$BUILD_CMD" )
+    BUILD_EXIT=$?
+    set -e
+    if [ $BUILD_EXIT -ne 0 ]; then
+        echo "FEHLER: Exe-Build vor dem Push fehlgeschlagen ($BUILD_CMD). Push abgebrochen." >&2
+        exit 1
+    fi
+    echo "✔ Exe-Build erfolgreich abgeschlossen."
+fi
+
+# -----------------------------------------------------------------------------
+# Artefakt-Deployment ins externe Repository (hooks.deployartifact)
+# -----------------------------------------------------------------------------
+DEPLOY_ARTIFACT=$(git config --bool hooks.deployartifact 2>/dev/null || echo "false")
+if [ "$DEPLOY_ARTIFACT" = "true" ]; then
+    EXTERNAL_REPO=$(git config hooks.externalrepo 2>/dev/null || echo "")
+    if [ -z "$EXTERNAL_REPO" ]; then
+        echo "FEHLER: hooks.deployartifact ist aktiv, aber hooks.externalrepo ist nicht konfiguriert." >&2
+        echo "Bitte 'git config hooks.externalrepo \"<git-url-oder-pfad>\"' setzen." >&2
+        exit 1
+    fi
+
+    EXTERNAL_BRANCH=$(git config hooks.externalrepobranch 2>/dev/null || echo "main")
+    [ -z "$EXTERNAL_BRANCH" ] && EXTERNAL_BRANCH="main"
+
+    EXTERNAL_DIR=$(git config hooks.externalrepodir 2>/dev/null || echo "releases")
+    [ -z "$EXTERNAL_DIR" ] && EXTERNAL_DIR="releases"
+
+    ARTIFACT_PATTERN=$(git config hooks.artifactpattern 2>/dev/null || echo "dist/*.exe")
+    [ -z "$ARTIFACT_PATTERN" ] && ARTIFACT_PATTERN="dist/*.exe"
+
+    echo "----------------------------------------------------------------"
+    echo "Artefakt-Deployment aktiv (hooks.deployartifact):"
+    echo "Suche Artefakte nach Muster '$ARTIFACT_PATTERN'..."
+
+    MATCHING_FILES=()
+    for f in $ARTIFACT_PATTERN; do
+        if [ -f "$f" ]; then
+            MATCHING_FILES+=("$f")
+        fi
+    done
+
+    if [ ${#MATCHING_FILES[@]} -eq 0 ]; then
+        echo "FEHLER: Keine Artefakte gefunden, die dem Muster '$ARTIFACT_PATTERN' entsprechen!" >&2
+        echo "Push abgebrochen." >&2
+        exit 1
+    fi
+
+    SOURCE_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    SOURCE_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "$SOURCE_COMMIT")
+
+    TMP_SYNC_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t 'artifact_sync')
+
+    echo "Synchronisiere externes Repository ($EXTERNAL_REPO, Branch: $EXTERNAL_BRANCH)..."
+    if git clone --depth 1 --branch "$EXTERNAL_BRANCH" "$EXTERNAL_REPO" "$TMP_SYNC_DIR" 2>/dev/null; then
+        echo "Bestehenden Branch '$EXTERNAL_BRANCH' ausgecheckt."
+    else
+        echo "Branch '$EXTERNAL_BRANCH' nicht vorhanden oder neues Repo, initialisiere..."
+        git clone "$EXTERNAL_REPO" "$TMP_SYNC_DIR" 2>/dev/null || {
+            mkdir -p "$TMP_SYNC_DIR"
+            git -C "$TMP_SYNC_DIR" init
+            git -C "$TMP_SYNC_DIR" remote add origin "$EXTERNAL_REPO"
+        }
+        git -C "$TMP_SYNC_DIR" checkout -B "$EXTERNAL_BRANCH"
+    fi
+
+    TARGET_FOLDER="$TMP_SYNC_DIR/$EXTERNAL_DIR"
+    mkdir -p "$TARGET_FOLDER"
+
+    for art in "${MATCHING_FILES[@]}"; do
+        cp -f "$art" "$TARGET_FOLDER/"
+        echo "Kopiert: $art -> $EXTERNAL_DIR/$(basename "$art")"
+    done
+
+    git -C "$TMP_SYNC_DIR" config user.name "$(git config user.name 2>/dev/null || echo 'Project Scaffolder')"
+    git -C "$TMP_SYNC_DIR" config user.email "$(git config user.email 2>/dev/null || echo 'scaffolder@localhost')"
+    git -C "$TMP_SYNC_DIR" add -A
+
+    if git -C "$TMP_SYNC_DIR" diff --cached --quiet; then
+        echo "Keine Änderungen am Artefakt im externen Repository (bereits aktuell)."
+    else
+        git -C "$TMP_SYNC_DIR" commit -m "Release $SOURCE_VERSION ($SOURCE_COMMIT)" --no-verify
+        echo "Pushe Artefakt ins externe Repository..."
+        git -C "$TMP_SYNC_DIR" push -u origin "$EXTERNAL_BRANCH" || {
+            rm -rf "$TMP_SYNC_DIR" 2>/dev/null || true
+            echo "FEHLER: Push ins externe Repository ($EXTERNAL_REPO) fehlgeschlagen!" >&2
+            exit 1
+        }
+        echo "✔ Artefakt erfolgreich im externen Repository aktualisiert."
+    fi
+    rm -rf "$TMP_SYNC_DIR" 2>/dev/null || true
+    echo "----------------------------------------------------------------"
+fi
+

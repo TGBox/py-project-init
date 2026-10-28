@@ -739,6 +739,207 @@ class TestGitHooks(unittest.TestCase):
             self.assertIn("refs/heads/main", res_main.stderr)
 
 
+    def test_pre_push_renew_tag_on_push(self):
+        """Verifies that pre-push renews/forces the SemVer tag on HEAD if newer commits exist."""
+        hook_path = self.hooks_dir / "pre-push"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.renewtagonpush", "true"], cwd=proj, check=True)
+
+            (proj / "pyproject.toml").write_text('[project]\nname = "tag-app"\nversion = "1.2.3"\n', encoding="utf-8")
+            (proj / "README.md").write_text("# Hello\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "chore: initial commit"], cwd=proj, check=True)
+
+            initial_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+            # Set initial tag on first commit
+            subprocess.run(["git", "tag", "v1.2.3", initial_sha], cwd=proj, check=True)
+
+            # Create feature branch and add a commit
+            subprocess.run(["git", "checkout", "-b", "feature/my-feat"], cwd=proj, check=True)
+            (proj / "README.md").write_text("# Hello Updated\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "feat: update readme"], cwd=proj, check=True)
+
+            feature_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+            self.assertNotEqual(initial_sha, feature_sha)
+
+            # Simulate push of feature branch
+            push_input = f"refs/heads/feature/my-feat {feature_sha} refs/heads/feature/my-feat 0000000000000000000000000000000000000000\n"
+            res = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertEqual(res.returncode, 0, f"pre-push failed: {res.stderr}")
+            self.assertIn("Tag-Erneuerung aktiv", res.stdout)
+            self.assertIn("v1.2.3", res.stdout)
+
+            # Check that tag v1.2.3 now points to feature_sha
+            tag_sha = subprocess.check_output(["git", "rev-list", "-n", "1", "v1.2.3"], cwd=proj, text=True).strip()
+            self.assertEqual(tag_sha, feature_sha)
+
+    def test_pre_push_custom_test_cmd(self):
+        """Verifies hooks.testcmd executes custom command and blocks push on failure."""
+        hook_path = self.hooks_dir / "pre-push"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+
+            (proj / "README.md").write_text("# Hello\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "chore: init"], cwd=proj, check=True)
+            sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+
+            subprocess.run(["git", "checkout", "-b", "feature/tests"], cwd=proj, check=True)
+            push_input = f"refs/heads/feature/tests {sha} refs/heads/feature/tests 0000000000000000000000000000000000000000\n"
+
+            # 1. Custom test command succeeds
+            subprocess.run(["git", "config", "hooks.testcmd", "echo 'CUSTOM TESTS PASSED'"], cwd=proj, check=True)
+            res_ok = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertEqual(res_ok.returncode, 0)
+            self.assertIn("CUSTOM TESTS PASSED", res_ok.stdout)
+
+            # 2. Custom test command fails -> blocks push
+            subprocess.run(["git", "config", "hooks.testcmd", "echo 'TESTS BROKEN' && exit 1"], cwd=proj, check=True)
+            res_fail = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertNotEqual(res_fail.returncode, 0)
+            self.assertIn("TESTS BROKEN", res_fail.stdout)
+            self.assertIn("Push abgebrochen", res_fail.stderr)
+
+    def test_pre_push_build_exe(self):
+        """Verifies hooks.buildexe triggers build and aborts push on failure."""
+        hook_path = self.hooks_dir / "pre-push"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.buildexe", "true"], cwd=proj, check=True)
+
+            (proj / "README.md").write_text("# Hello\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "chore: init"], cwd=proj, check=True)
+            sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+
+            subprocess.run(["git", "checkout", "-b", "feature/build"], cwd=proj, check=True)
+            push_input = f"refs/heads/feature/build {sha} refs/heads/feature/build 0000000000000000000000000000000000000000\n"
+
+            # Successful build
+            subprocess.run(["git", "config", "hooks.buildcmd", "mkdir -p dist && touch dist/test_app.exe"], cwd=proj, check=True)
+            res_ok = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertEqual(res_ok.returncode, 0, f"build failed: {res_ok.stderr}")
+            self.assertIn("Exe-Build erfolgreich abgeschlossen", res_ok.stdout)
+            self.assertTrue((proj / "dist" / "test_app.exe").exists())
+
+            # Failing build -> blocks push
+            subprocess.run(["git", "config", "hooks.buildcmd", "echo 'Compiler error' >&2 && exit 1"], cwd=proj, check=True)
+            res_fail = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertNotEqual(res_fail.returncode, 0)
+            self.assertIn("Exe-Build vor dem Push fehlgeschlagen", res_fail.stderr)
+
+    def test_pre_push_deploy_artifact(self):
+        """Verifies hooks.deployartifact synchronizes built artifact to an external git repository."""
+        hook_path = self.hooks_dir / "pre-push"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            ext_repo = base / "external_repo"
+            ext_repo.mkdir()
+            subprocess.run(["git", "init", "-b", "main"], cwd=ext_repo, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=ext_repo, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=ext_repo, check=True)
+            subprocess.run(["git", "config", "receive.denyCurrentBranch", "updateInstead"], cwd=ext_repo, check=True)
+            (ext_repo / "README.md").write_text("# External Release Repo\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=ext_repo, check=True)
+            subprocess.run(["git", "commit", "-m", "init external repo"], cwd=ext_repo, check=True)
+
+            # Main project
+            proj = base / "main_proj"
+            proj.mkdir()
+            subprocess.run(["git", "init", "-b", "main"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+
+            (proj / "pyproject.toml").write_text('[project]\nname = "main-app"\nversion = "2.0.0"\n', encoding="utf-8")
+            (proj / "dist").mkdir()
+            (proj / "dist" / "main-app.exe").write_text("BINARY CONTENT", encoding="utf-8")
+
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "feat: release 2.0.0"], cwd=proj, check=True)
+            sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+
+            subprocess.run(["git", "checkout", "-b", "feature/deploy"], cwd=proj, check=True)
+            push_input = f"refs/heads/feature/deploy {sha} refs/heads/feature/deploy 0000000000000000000000000000000000000000\n"
+
+            # Configure artifact deployment pointing to ext_repo
+            subprocess.run(["git", "config", "hooks.deployartifact", "true"], cwd=proj, check=True)
+            # Use forward slashes for git URL / local path
+            ext_path_str = str(ext_repo).replace("\\", "/")
+            subprocess.run(["git", "config", "hooks.externalrepo", ext_path_str], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.externalrepobranch", "main"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.externalrepodir", "releases"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.artifactpattern", "dist/*.exe"], cwd=proj, check=True)
+
+            res = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            self.assertEqual(res.returncode, 0, f"deploy artifact failed: {res.stderr}\nstdout: {res.stdout}")
+            self.assertIn("Artefakt erfolgreich im externen Repository aktualisiert", res.stdout)
+
+            # Check that ext_repo received the artifact on main branch
+            subprocess.run(["git", "checkout", "main"], cwd=ext_repo, check=True, capture_output=True)
+            deployed_file = ext_repo / "releases" / "main-app.exe"
+            self.assertTrue(deployed_file.exists(), "Deployed artifact not found in external repository!")
+            self.assertEqual(deployed_file.read_text(encoding="utf-8"), "BINARY CONTENT")
+
+
 if __name__ == "__main__":
     unittest.main()
 

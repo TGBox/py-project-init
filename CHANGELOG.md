@@ -2,7 +2,9 @@
 
 ## SemVer v3.0.1
 
-- 2026-10-26 (3e46dc6): fix: change pre push hook templates to check for changed code files before starting a full test suite
+- 2026-10-28 (a3d3ebc): feat: add a more fine granular configuration option for the git hook lifecycle
+- 2026-10-26 (ff1a42b): Merge pull request #4 from TGBox/smart-tests
+- 2026-10-26 (4a8c5cf): fix: change pre push hook templates to check for changed code files before starting a full test suite
 - 2026-10-26 (0342028): Merge pull request #3 from TGBox/ai-decide
 - 2026-10-26 (d34165d): fix: fix deprecated default model selection for gemini, feat: add manual key verification button, add automated saving of the key on first successful call with direct feedback via info dialog
 - 2026-10-26 (b71e11c): feat: add new ai advisor where the user can enter and safely store ai keys for local or external ai models to provide advice on the selection of an ai framework or a project title, add ui integration, add testsuites

@@ -34,6 +34,6 @@ pre-rebase:
   default: true
 
 pre-push:
-  name: "Pre-Push: Branch-Schutz & Test-Gate"
-  description: "Blockiert direkte Pushes auf main/master und führt vor dem Push die Test-Suite aus (optional mit smarter Testausführung)."
+  name: "Pre-Push: Branch-Schutz, Test-Gate, Build & Artefakt-Deploy"
+  description: "Blockiert direkte Pushes auf main/master, führt Tests aus (optional smart), erneuert Tags, baut optional Exes und synchronisiert Artefakte ins externe Repo."
   default: true
