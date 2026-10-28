@@ -109,5 +109,105 @@ class TestCLI(unittest.TestCase):
         self.assertIn("Kein GitHub-Token gefunden", err.getvalue())
 
 
+    def test_cli_push_pipeline_options(self):
+        """Verifies generating project with granular push pipeline CLI flags."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out = io.StringIO()
+            with patch("sys.stdout", out):
+                code = run_cli([
+                    "cli_pipeline_app",
+                    "-t", "python-cli",
+                    "-p", temp_dir,
+                    "--renew-tag-on-push",
+                    "--test-cmd", "pytest -q",
+                    "--build-exe",
+                    "--build-cmd", "uv run pyinstaller main.py",
+                    "--artifact-pattern", "dist/cli_pipeline_app.exe",
+                    "--deploy-artifact",
+                    "--external-repo", "https://example.com/repo-artifacts.git",
+                    "--external-repo-branch", "release",
+                    "--external-repo-dir", "downloads",
+                ])
+            self.assertEqual(code, 0)
+            target = Path(temp_dir) / "cli_pipeline_app"
+            self.assertTrue(target.is_dir())
+
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.renewtagonpush"], cwd=target, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.testcmd"], cwd=target, text=True).strip(),
+                "pytest -q"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.buildexe"], cwd=target, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.buildcmd"], cwd=target, text=True).strip(),
+                "uv run pyinstaller main.py"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.artifactpattern"], cwd=target, text=True).strip(),
+                "dist/cli_pipeline_app.exe"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.deployartifact"], cwd=target, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.externalrepo"], cwd=target, text=True).strip(),
+                "https://example.com/repo-artifacts.git"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.externalrepobranch"], cwd=target, text=True).strip(),
+                "release"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.externalrepodir"], cwd=target, text=True).strip(),
+                "downloads"
+            )
+
+    def test_cli_retrofit_hooks_with_pipeline_flags(self):
+        """Verifies retrofitting existing project with push pipeline CLI flags."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir) / "my_retrofit_cli_proj"
+            proj.mkdir()
+            (proj / "main.py").write_text("print('test')", encoding="utf-8")
+
+            out = io.StringIO()
+            with patch("sys.stdout", out):
+                code = run_cli([
+                    "--retrofit-hooks", str(proj),
+                    "--renew-tag-on-push",
+                    "--build-exe",
+                    "--build-cmd", "cargo build --release",
+                    "--deploy-artifact",
+                    "--external-repo", "git@github.com:myorg/binaries.git",
+                ])
+            self.assertEqual(code, 0)
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.renewtagonpush"], cwd=proj, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.buildexe"], cwd=proj, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.buildcmd"], cwd=proj, text=True).strip(),
+                "cargo build --release"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.deployartifact"], cwd=proj, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.externalrepo"], cwd=proj, text=True).strip(),
+                "git@github.com:myorg/binaries.git"
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

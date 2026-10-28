@@ -570,6 +570,66 @@ class TestTemplateManager(unittest.TestCase):
             self.assertTrue((proj_dir / ".agents" / "skills" / "code-review").exists())
             self.assertTrue((proj_dir / "AGENTS.md").exists())
 
+    def test_retrofit_push_pipeline_options(self):
+        """Verifies retrofitting hooks with push pipeline options (renewtagonpush, buildexe, deployartifact, testcmd)."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj_dir = Path(temp_dir) / "pipeline_proj"
+            proj_dir.mkdir()
+            (proj_dir / "app.py").write_text("print('hello')", encoding="utf-8")
+
+            self.manager.retrofit_hooks(
+                proj_dir,
+                ["pre-push"],
+                enable_autotag=True,
+                enable_smart_tests=True,
+                enable_renew_tag_on_push=True,
+                test_cmd="pytest -m unit",
+                enable_build_exe=True,
+                build_cmd="uv run pyinstaller app.py",
+                artifact_pattern="dist/app.exe",
+                enable_deploy_artifact=True,
+                external_repo="https://example.com/artifacts.git",
+                external_repo_branch="release-v1",
+                external_repo_dir="binaries",
+            )
+
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.renewtagonpush"], cwd=proj_dir, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.testcmd"], cwd=proj_dir, text=True).strip(),
+                "pytest -m unit"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.buildexe"], cwd=proj_dir, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.buildcmd"], cwd=proj_dir, text=True).strip(),
+                "uv run pyinstaller app.py"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.artifactpattern"], cwd=proj_dir, text=True).strip(),
+                "dist/app.exe"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.deployartifact"], cwd=proj_dir, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.externalrepo"], cwd=proj_dir, text=True).strip(),
+                "https://example.com/artifacts.git"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.externalrepobranch"], cwd=proj_dir, text=True).strip(),
+                "release-v1"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.externalrepodir"], cwd=proj_dir, text=True).strip(),
+                "binaries"
+            )
+
     def test_create_template_from_project(self):
         """Verifies creating a reusable template from an existing folder."""
         with tempfile.TemporaryDirectory() as temp_dir:

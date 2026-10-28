@@ -74,6 +74,48 @@ def run_cli(args: list[str] | None = None) -> int:
         help="Smarte Testausführung im Pre-Push-Hook deaktivieren (stets vollständige Testsuite ausführen)",
     )
     parser.add_argument(
+        "--renew-tag-on-push",
+        action="store_true",
+        help="Tag vor jedem Push automatisch auf HEAD erneuern und mitpushen (hooks.renewtagonpush)",
+    )
+    parser.add_argument(
+        "--test-cmd",
+        help="Benutzerdefinierter Testbefehl im Pre-Push-Hook (hooks.testcmd)",
+    )
+    parser.add_argument(
+        "--build-exe",
+        action="store_true",
+        help="Exe-Build vor jedem Push ausführen (hooks.buildexe)",
+    )
+    parser.add_argument(
+        "--build-cmd",
+        help="Build-Befehl für Exe (hooks.buildcmd, Standard: Auto-Erkennung)",
+    )
+    parser.add_argument(
+        "--artifact-pattern",
+        default="dist/*.exe",
+        help="Artefakt-Muster für Build/Deploy (hooks.artifactpattern, Standard: dist/*.exe)",
+    )
+    parser.add_argument(
+        "--deploy-artifact",
+        action="store_true",
+        help="Gebautes Artefakt in externes Repository übertragen (hooks.deployartifact)",
+    )
+    parser.add_argument(
+        "--external-repo",
+        help="URL oder Pfad des externen Artefakt-Repositories (hooks.externalrepo)",
+    )
+    parser.add_argument(
+        "--external-repo-branch",
+        default="main",
+        help="Ziel-Branch im externen Artefakt-Repository (hooks.externalrepobranch, Standard: main)",
+    )
+    parser.add_argument(
+        "--external-repo-dir",
+        default="releases",
+        help="Unterordner im externen Repository (hooks.externalrepodir, Standard: releases)",
+    )
+    parser.add_argument(
         "--no-agents",
         action="store_true",
         help="Agenten-Konfiguration (.agents/) nicht generieren",
@@ -220,6 +262,15 @@ def run_cli(args: list[str] | None = None) -> int:
             log_callback=print,
             enable_autotag=not parsed.no_tags,
             enable_smart_tests=not parsed.no_smart_tests,
+            enable_renew_tag_on_push=parsed.renew_tag_on_push,
+            test_cmd=parsed.test_cmd,
+            enable_build_exe=parsed.build_exe,
+            build_cmd=parsed.build_cmd,
+            artifact_pattern=parsed.artifact_pattern,
+            enable_deploy_artifact=parsed.deploy_artifact,
+            external_repo=parsed.external_repo,
+            external_repo_branch=parsed.external_repo_branch,
+            external_repo_dir=parsed.external_repo_dir,
         )
         print(f"\n✔ Git-Hooks erfolgreich in '{target_path}' nachgerüstet.")
         return 0
@@ -275,6 +326,15 @@ def run_cli(args: list[str] | None = None) -> int:
         "enable_git_hooks": not parsed.no_hooks,
         "enable_git_tags": not parsed.no_hooks and not parsed.no_tags,
         "enable_smart_tests": not parsed.no_hooks and not parsed.no_smart_tests,
+        "enable_renew_tag_on_push": parsed.renew_tag_on_push,
+        "test_cmd": parsed.test_cmd,
+        "enable_build_exe": parsed.build_exe,
+        "build_cmd": parsed.build_cmd,
+        "artifact_pattern": parsed.artifact_pattern,
+        "enable_deploy_artifact": parsed.deploy_artifact,
+        "external_repo": parsed.external_repo,
+        "external_repo_branch": parsed.external_repo_branch,
+        "external_repo_dir": parsed.external_repo_dir,
         "selected_git_hooks": all_hooks,
         "enable_agent_configs": not parsed.no_agents,
         "selected_agent_rules": recommended.get("rules", []),

@@ -58,7 +58,12 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
     - **`post-checkout` (Dependency-Sync & Branch-Check):** Führt `uv sync` oder `npm install` aus, meldet geänderte Unity Packages (`manifest.json`) und warnt vor direkter Arbeit auf `main`.
     - **`post-merge` (Lockfile-Sync & .env-Vergleich):** Synchronisiert Abhängigkeiten nach Merges/Pulls, meldet Unity Package-Updates und warnt vor fehlenden Variablen aus `.env.example`.
     - **`pre-rebase` (Historien-Schutz):** Blockiert versehentliches Rebasen der Haupt-Branches (`main`/`master`).
-    - **`pre-push` (Branch-Schutz & Test-Gate mit smarter Testausführung):** Blockiert direkte Pushes auf `main`/`master` und führt vor dem Push die Test-Suite aus (pytest, cargo, vitest, dotnet, unity). Über `hooks.smarttests` konfigurierbar: Wurde mindestens eine Codedatei verändert, werden alle Tests ausgeführt; bei reinen Konfigurations- oder Dokumentationsänderungen wird das Test-Gate zeitsparend übersprungen.
+    - **`pre-push` (Branch-Schutz & Erweiterte Push-Pipeline):**
+      - **Branch-Schutz:** Blockiert direkte Pushes auf `main`/`master`.
+      - **Smarte Testausführung & benutzerdefinierter Testbefehl (`hooks.testcmd`):** Führt vor dem Push die Test-Suite aus (pytest, cargo, vitest, dotnet, unity) oder einen frei wählbaren Testbefehl. Über `hooks.smarttests` steuerbar (überspringt Tests bei reinen Doku-/Konfig-Änderungen).
+      - **Automatische Tag-Erneuerung (`hooks.renewtagonpush`):** Aktualisiert und erzwingt das SemVer-Release-Tag (`vX.Y.Z`) auf `HEAD` vor dem Push, falls neue Commits existieren.
+      - **Automatischer Exe-Build (`hooks.buildexe`):** Baut vor jedem Push ein Executable (automatisch via PyInstaller, Cargo, dotnet oder per individuellem Build-Befehl `hooks.buildcmd`).
+      - **Artefakt-Deployment ins externe Repo (`hooks.deployartifact`):** Kopiert und synchronisiert die erstellten Release-Artefakte automatisch in ein separates Git-Repository (z. B. Releases-Repo).
   - Automatischer initialer Commit während der Generierung via `--no-verify`.
 - **Agenten-Regeln & Skills (.agents/):**
   - Modulare Bibliothek unter `assets/agent_configs/` für Coding-Assistenten.
@@ -148,6 +153,9 @@ uv run py-project-init cloud-hub -t python-fastapi --github --github-owner my-or
 
 # Projekt mit Autor und Lizenz initialisieren
 uv run py-project-init my-tool -t rust-cli --author "Max Mustermann" --email "max@example.com" --license MIT
+
+# Bestehendes Projekt mit Hooks & Push-Pipeline nachrüsten (Retrofit)
+uv run py-project-init --retrofit-hooks /pfad/zu/projekt --renew-tag-on-push --build-exe --deploy-artifact --external-repo https://github.com/my-org/releases.git
 ```
 
 ---

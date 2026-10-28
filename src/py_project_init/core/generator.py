@@ -195,12 +195,31 @@ class TemplateManager:
             selected_hooks = context.get("selected_git_hooks", [])
             enable_autotag = context.get("enable_git_tags", False)
             enable_smart_tests = context.get("enable_smart_tests", True)
+            enable_renew_tag_on_push = context.get("enable_renew_tag_on_push", False)
+            test_cmd = context.get("test_cmd")
+            enable_build_exe = context.get("enable_build_exe", False)
+            build_cmd = context.get("build_cmd")
+            artifact_pattern = context.get("artifact_pattern")
+            enable_deploy_artifact = context.get("enable_deploy_artifact", False)
+            external_repo = context.get("external_repo")
+            external_repo_branch = context.get("external_repo_branch")
+            external_repo_dir = context.get("external_repo_dir")
+
             self._install_git_hooks(
                 target_dir,
                 selected_hooks,
                 log_callback,
                 enable_autotag=enable_autotag,
                 enable_smart_tests=enable_smart_tests,
+                enable_renew_tag_on_push=enable_renew_tag_on_push,
+                test_cmd=test_cmd,
+                enable_build_exe=enable_build_exe,
+                build_cmd=build_cmd,
+                artifact_pattern=artifact_pattern,
+                enable_deploy_artifact=enable_deploy_artifact,
+                external_repo=external_repo,
+                external_repo_branch=external_repo_branch,
+                external_repo_dir=external_repo_dir,
             )
 
         # 4. Agenten-Konfiguration (.agents/ & AGENTS.md)
@@ -627,8 +646,17 @@ class TemplateManager:
         log_callback,
         enable_autotag: bool = False,
         enable_smart_tests: bool = True,
+        enable_renew_tag_on_push: bool = False,
+        test_cmd: str | None = None,
+        enable_build_exe: bool = False,
+        build_cmd: str | None = None,
+        artifact_pattern: str | None = None,
+        enable_deploy_artifact: bool = False,
+        external_repo: str | None = None,
+        external_repo_branch: str | None = None,
+        external_repo_dir: str | None = None,
     ):
-        """Copies selected git hooks to .git/hooks/, sets executable permissions, and configures tags/smart tests if enabled."""
+        """Copies selected git hooks to .git/hooks/, sets executable permissions, and configures tags/smart tests/build/deploy if enabled."""
         git_hooks_dir = target_dir / ".git" / "hooks"
         git_hooks_dir.mkdir(parents=True, exist_ok=True)
 
@@ -683,6 +711,150 @@ class TemplateManager:
                 )
             except Exception:
                 pass
+
+        if enable_renew_tag_on_push:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.renewtagonpush", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                subprocess.run(
+                    ["git", "config", "push.followTags", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: Tag-Erneuerung beim Push (hooks.renewtagonpush & push.followTags) aktiviert.")
+            except Exception as e:
+                log_callback(f"Warnung: Tag-Erneuerung konnte nicht konfiguriert werden: {e}")
+        else:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.renewtagonpush", "false"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+            except Exception:
+                pass
+
+        if test_cmd and test_cmd.strip():
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.testcmd", test_cmd.strip()],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback(f"Git-Konfiguration: Benutzerdefinierter Testbefehl (hooks.testcmd='{test_cmd.strip()}') gesetzt.")
+            except Exception as e:
+                log_callback(f"Warnung: hooks.testcmd konnte nicht gesetzt werden: {e}")
+        else:
+            try:
+                subprocess.run(
+                    ["git", "config", "--unset", "hooks.testcmd"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+            except Exception:
+                pass
+
+        if enable_build_exe:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.buildexe", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: Exe-Build vor Push (hooks.buildexe) aktiviert.")
+                if build_cmd and build_cmd.strip():
+                    subprocess.run(
+                        ["git", "config", "hooks.buildcmd", build_cmd.strip()],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+                    log_callback(f"Git-Konfiguration: Build-Befehl (hooks.buildcmd='{build_cmd.strip()}') gesetzt.")
+                else:
+                    subprocess.run(
+                        ["git", "config", "--unset", "hooks.buildcmd"],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+            except Exception as e:
+                log_callback(f"Warnung: hooks.buildexe konnte nicht konfiguriert werden: {e}")
+        else:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.buildexe", "false"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+            except Exception:
+                pass
+
+        if artifact_pattern and artifact_pattern.strip():
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.artifactpattern", artifact_pattern.strip()],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback(f"Git-Konfiguration: Artefakt-Muster (hooks.artifactpattern='{artifact_pattern.strip()}') gesetzt.")
+            except Exception as e:
+                log_callback(f"Warnung: hooks.artifactpattern konnte nicht gesetzt werden: {e}")
+
+        if enable_deploy_artifact:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.deployartifact", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: Artefakt-Deploy ins externe Repo (hooks.deployartifact) aktiviert.")
+                if external_repo and external_repo.strip():
+                    subprocess.run(
+                        ["git", "config", "hooks.externalrepo", external_repo.strip()],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+                    log_callback(f"Git-Konfiguration: Externes Repo (hooks.externalrepo='{external_repo.strip()}') gesetzt.")
+                if external_repo_branch and external_repo_branch.strip():
+                    subprocess.run(
+                        ["git", "config", "hooks.externalrepobranch", external_repo_branch.strip()],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+                if external_repo_dir and external_repo_dir.strip():
+                    subprocess.run(
+                        ["git", "config", "hooks.externalrepodir", external_repo_dir.strip()],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+            except Exception as e:
+                log_callback(f"Warnung: hooks.deployartifact konnte nicht konfiguriert werden: {e}")
+        else:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.deployartifact", "false"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+            except Exception:
+                pass
+
 
     def _install_agent_configs(
         self,
@@ -930,6 +1102,15 @@ class TemplateManager:
         log_callback=print,
         enable_autotag: bool = False,
         enable_smart_tests: bool = True,
+        enable_renew_tag_on_push: bool = False,
+        test_cmd: str | None = None,
+        enable_build_exe: bool = False,
+        build_cmd: str | None = None,
+        artifact_pattern: str | None = None,
+        enable_deploy_artifact: bool = False,
+        external_repo: str | None = None,
+        external_repo_branch: str | None = None,
+        external_repo_dir: str | None = None,
     ):
         """Retrofits git hooks into an existing project folder."""
         self._init_git_repo(target_dir, log_callback)
@@ -939,6 +1120,15 @@ class TemplateManager:
             log_callback,
             enable_autotag=enable_autotag,
             enable_smart_tests=enable_smart_tests,
+            enable_renew_tag_on_push=enable_renew_tag_on_push,
+            test_cmd=test_cmd,
+            enable_build_exe=enable_build_exe,
+            build_cmd=build_cmd,
+            artifact_pattern=artifact_pattern,
+            enable_deploy_artifact=enable_deploy_artifact,
+            external_repo=external_repo,
+            external_repo_branch=external_repo_branch,
+            external_repo_dir=external_repo_dir,
         )
 
     def retrofit_agent_configs(

@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTreeWidget, QTreeWidgetItem, QTextEdit, QSplitter,
     QFileDialog, QGroupBox, QCheckBox, QLineEdit, QComboBox,
-    QMessageBox
+    QMessageBox, QScrollArea, QWidget
 )
 from py_project_init.core.generator import TemplateManager
 from py_project_init.ui.ai_dialog import AiAdvisorDialog
@@ -223,7 +223,8 @@ class RetrofitDialog(QDialog):
     def __init__(self, template_manager: TemplateManager, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Bestehendes Projekt nachrüsten")
-        self.resize(680, 620)
+        self.resize(760, 700)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
         self.template_manager = template_manager
         self.hook_checkboxes: dict[str, QCheckBox] = {}
         self.rule_checkboxes: dict[str, QCheckBox] = {}
@@ -232,9 +233,18 @@ class RetrofitDialog(QDialog):
         self._init_ui()
 
     def _init_ui(self):
-        layout = QVBoxLayout(self)
+        root_layout = QVBoxLayout(self)
+        root_layout.setContentsMargins(12, 12, 12, 12)
+        root_layout.setSpacing(10)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        container = QWidget()
+        scroll.setWidget(container)
+        layout = QVBoxLayout(container)
         layout.setSpacing(12)
-        layout.setContentsMargins(14, 14, 14, 14)
+        layout.setContentsMargins(6, 6, 6, 6)
 
         # Target Directory
         target_group = QGroupBox("Zielprojekt (Bestehender Ordner)")
@@ -271,11 +281,75 @@ class RetrofitDialog(QDialog):
         self.enable_smart_tests_cb.setToolTip("Führt im Pre-Push-Hook alle Tests aus, wenn Codedateien geändert wurden. Überspringt das Test-Gate, wenn nur Konfigurations- oder Dokumentationsdateien geändert wurden.")
         hooks_layout.addWidget(self.enable_smart_tests_cb)
 
+        # Erweiterte Push-Pipeline- & Automatisierungs-Optionen
+        self.advanced_hooks_group = QGroupBox("▼ Erweiterte Push-Pipeline- & Automatisierungs-Optionen")
+        adv_hooks_layout = QVBoxLayout(self.advanced_hooks_group)
+
+        self.enable_renew_tag_cb = QCheckBox("Tag bei Push immer auf HEAD erneuern & mitpushen (hooks.renewtagonpush)")
+        self.enable_renew_tag_cb.setToolTip("Prüft vor dem Push, ob neuere Commits seit dem letzten Versions-Tag vorliegen oder HEAD ungetaggt ist. Setzt den Versions-Tag per 'git tag -f' auf HEAD und pusht ihn mit.")
+        adv_hooks_layout.addWidget(self.enable_renew_tag_cb)
+
+        # Custom Test Command
+        self.enable_custom_test_cb = QCheckBox("Benutzerdefinierten Testbefehl im Pre-Push verwenden (hooks.testcmd)")
+        self.enable_custom_test_cb.setToolTip("Überschreibt die Standard-Testsuite-Erkennung mit einem individuellen Befehl.")
+        self.test_cmd_input = QLineEdit()
+        self.test_cmd_input.setPlaceholderText("z. B. uv run pytest -q oder cargo test")
+        self.test_cmd_input.setEnabled(False)
+        self.enable_custom_test_cb.toggled.connect(self.test_cmd_input.setEnabled)
+        adv_hooks_layout.addWidget(self.enable_custom_test_cb)
+        adv_hooks_layout.addWidget(self.test_cmd_input)
+
+        # Exe Build before push
+        self.enable_build_exe_cb = QCheckBox("Exe-Build vor jedem Push ausführen (hooks.buildexe)")
+        self.enable_build_exe_cb.setToolTip("Baut vor dem Push eine ausführbare Exe-Datei. Schlägt der Build fehl, wird der Push sofort abgebrochen (Fail-Fast).")
+        self.build_cmd_input = QLineEdit()
+        self.build_cmd_input.setPlaceholderText("Build-Befehl (leer lassen für automatische Erkennung, z.B. PyInstaller, Cargo, .NET)")
+        self.build_cmd_input.setEnabled(False)
+
+        self.artifact_pattern_input = QLineEdit()
+        self.artifact_pattern_input.setPlaceholderText("Artefakt-Muster (Standard: dist/*.exe)")
+        self.artifact_pattern_input.setEnabled(False)
+
+        self.enable_build_exe_cb.toggled.connect(self.build_cmd_input.setEnabled)
+        self.enable_build_exe_cb.toggled.connect(self.artifact_pattern_input.setEnabled)
+        adv_hooks_layout.addWidget(self.enable_build_exe_cb)
+        adv_hooks_layout.addWidget(self.build_cmd_input)
+        adv_hooks_layout.addWidget(self.artifact_pattern_input)
+
+        # Deploy Artifact to external repository
+        self.enable_deploy_artifact_cb = QCheckBox("Gebautes Artefakt in externes Repository übertragen (hooks.deployartifact)")
+        self.enable_deploy_artifact_cb.setToolTip("Kopiert das erstellte Artefakt in ein externes Repository, committet es mit Versions-Tag und pusht auf den Ziel-Branch.")
+        self.external_repo_input = QLineEdit()
+        self.external_repo_input.setPlaceholderText("Externes Git-Repository (z. B. git@github.com:org/releases.git oder lokaler Pfad)")
+        self.external_repo_input.setEnabled(False)
+
+        ext_repo_row = QHBoxLayout()
+        self.external_branch_input = QLineEdit()
+        self.external_branch_input.setPlaceholderText("Ziel-Branch (Standard: main)")
+        self.external_branch_input.setEnabled(False)
+
+        self.external_dir_input = QLineEdit()
+        self.external_dir_input.setPlaceholderText("Unterordner im externen Repo (Standard: releases)")
+        self.external_dir_input.setEnabled(False)
+
+        ext_repo_row.addWidget(self.external_branch_input)
+        ext_repo_row.addWidget(self.external_dir_input)
+
+        self.enable_deploy_artifact_cb.toggled.connect(self.external_repo_input.setEnabled)
+        self.enable_deploy_artifact_cb.toggled.connect(self.external_branch_input.setEnabled)
+        self.enable_deploy_artifact_cb.toggled.connect(self.external_dir_input.setEnabled)
+        adv_hooks_layout.addWidget(self.enable_deploy_artifact_cb)
+        adv_hooks_layout.addWidget(self.external_repo_input)
+        adv_hooks_layout.addLayout(ext_repo_row)
+
+        hooks_layout.addWidget(self.advanced_hooks_group)
+
         self.enable_hooks_cb.toggled.connect(
             lambda checked: (
                 [cb.setEnabled(checked) for cb in self.hook_checkboxes.values()],
                 self.enable_tags_cb.setEnabled(checked),
-                self.enable_smart_tests_cb.setEnabled(checked)
+                self.enable_smart_tests_cb.setEnabled(checked),
+                self.advanced_hooks_group.setEnabled(checked)
             )
         )
         hooks_layout.addLayout(hooks_list_layout)
@@ -318,13 +392,15 @@ class RetrofitDialog(QDialog):
         )
         layout.addWidget(agent_group)
 
+        root_layout.addWidget(scroll)
+
         # Log View
         lbl_log = QLabel("<b>Ausführungsprotokoll:</b>")
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumHeight(130)
-        layout.addWidget(lbl_log)
-        layout.addWidget(self.log_view)
+        root_layout.addWidget(lbl_log)
+        root_layout.addWidget(self.log_view)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -338,7 +414,7 @@ class RetrofitDialog(QDialog):
         btn_layout.addWidget(self.run_btn)
         btn_layout.addStretch()
         btn_layout.addWidget(close_btn)
-        layout.addLayout(btn_layout)
+        root_layout.addLayout(btn_layout)
 
     def _select_target_dir(self):
         selected = QFileDialog.getExistingDirectory(self, "Bestehendes Projekt auswählen")
@@ -369,6 +445,15 @@ class RetrofitDialog(QDialog):
                     log_callback=self.log_view.append,
                     enable_autotag=self.enable_tags_cb.isChecked(),
                     enable_smart_tests=self.enable_smart_tests_cb.isChecked(),
+                    enable_renew_tag_on_push=self.enable_renew_tag_cb.isChecked(),
+                    test_cmd=self.test_cmd_input.text().strip() if self.enable_custom_test_cb.isChecked() else None,
+                    enable_build_exe=self.enable_build_exe_cb.isChecked(),
+                    build_cmd=self.build_cmd_input.text().strip() if self.enable_build_exe_cb.isChecked() else None,
+                    artifact_pattern=self.artifact_pattern_input.text().strip() if (self.enable_build_exe_cb.isChecked() or self.enable_deploy_artifact_cb.isChecked()) else None,
+                    enable_deploy_artifact=self.enable_deploy_artifact_cb.isChecked(),
+                    external_repo=self.external_repo_input.text().strip() if self.enable_deploy_artifact_cb.isChecked() else None,
+                    external_repo_branch=self.external_branch_input.text().strip() if self.enable_deploy_artifact_cb.isChecked() else None,
+                    external_repo_dir=self.external_dir_input.text().strip() if self.enable_deploy_artifact_cb.isChecked() else None,
                 )
             else:
                 self.log_view.append("Keine Git Hooks ausgewählt.")

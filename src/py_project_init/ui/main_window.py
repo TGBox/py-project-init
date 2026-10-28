@@ -579,12 +579,76 @@ class MainWindow(QMainWindow):
         )
         hooks_box_layout.addWidget(self.git_smart_tests_cb)
 
+        # Erweiterte Push-Pipeline- & Automatisierungs-Optionen
+        self.git_advanced_hooks_group = QGroupBox("▼ Erweiterte Push-Pipeline- & Automatisierungs-Optionen")
+        adv_hooks_layout = QVBoxLayout(self.git_advanced_hooks_group)
+
+        self.git_renew_tag_cb = QCheckBox("Tag bei Push immer auf HEAD erneuern & mitpushen (hooks.renewtagonpush)")
+        self.git_renew_tag_cb.setToolTip("Prüft vor dem Push, ob neuere Commits seit dem letzten Versions-Tag vorliegen oder HEAD ungetaggt ist. Setzt den Versions-Tag per 'git tag -f' auf HEAD und pusht ihn mit.")
+        adv_hooks_layout.addWidget(self.git_renew_tag_cb)
+
+        self.git_custom_test_cb = QCheckBox("Benutzerdefinierten Testbefehl im Pre-Push verwenden (hooks.testcmd)")
+        self.git_custom_test_cb.setToolTip("Überschreibt die Standard-Testsuite-Erkennung mit einem individuellen Befehl.")
+        self.git_test_cmd_input = QLineEdit()
+        self.git_test_cmd_input.setPlaceholderText("z. B. uv run pytest -q oder cargo test")
+        self.git_test_cmd_input.setEnabled(False)
+        self.git_custom_test_cb.toggled.connect(self.git_test_cmd_input.setEnabled)
+        adv_hooks_layout.addWidget(self.git_custom_test_cb)
+        adv_hooks_layout.addWidget(self.git_test_cmd_input)
+
+        self.git_build_exe_cb = QCheckBox("Exe-Build vor jedem Push ausführen (hooks.buildexe)")
+        self.git_build_exe_cb.setToolTip("Baut vor dem Push eine ausführbare Exe-Datei. Schlägt der Build fehl, wird der Push sofort abgebrochen (Fail-Fast).")
+        self.git_build_cmd_input = QLineEdit()
+        self.git_build_cmd_input.setPlaceholderText("Build-Befehl (leer lassen für automatische Erkennung, z.B. PyInstaller, Cargo, .NET)")
+        self.git_build_cmd_input.setEnabled(False)
+
+        self.git_artifact_pattern_input = QLineEdit()
+        self.git_artifact_pattern_input.setPlaceholderText("Artefakt-Muster (Standard: dist/*.exe)")
+        self.git_artifact_pattern_input.setEnabled(False)
+
+        self.git_build_exe_cb.toggled.connect(self.git_build_cmd_input.setEnabled)
+        self.git_build_exe_cb.toggled.connect(self.git_artifact_pattern_input.setEnabled)
+        adv_hooks_layout.addWidget(self.git_build_exe_cb)
+        adv_hooks_layout.addWidget(self.git_build_cmd_input)
+        adv_hooks_layout.addWidget(self.git_artifact_pattern_input)
+
+        self.git_deploy_artifact_cb = QCheckBox("Gebautes Artefakt in externes Repository übertragen (hooks.deployartifact)")
+        self.git_deploy_artifact_cb.setToolTip("Kopiert das erstellte Artefakt in ein externes Repository, committet es mit Versions-Tag und pusht auf den Ziel-Branch.")
+        self.git_external_repo_input = QLineEdit()
+        self.git_external_repo_input.setPlaceholderText("Externes Git-Repository (z. B. git@github.com:org/releases.git oder lokaler Pfad)")
+        self.git_external_repo_input.setEnabled(False)
+
+        ext_repo_row = QHBoxLayout()
+        self.git_external_branch_input = QLineEdit()
+        self.git_external_branch_input.setPlaceholderText("Ziel-Branch (Standard: main)")
+        self.git_external_branch_input.setEnabled(False)
+
+        self.git_external_dir_input = QLineEdit()
+        self.git_external_dir_input.setPlaceholderText("Unterordner im externen Repo (Standard: releases)")
+        self.git_external_dir_input.setEnabled(False)
+
+        ext_repo_row.addWidget(self.git_external_branch_input)
+        ext_repo_row.addWidget(self.git_external_dir_input)
+
+        self.git_deploy_artifact_cb.toggled.connect(self.git_external_repo_input.setEnabled)
+        self.git_deploy_artifact_cb.toggled.connect(self.git_external_branch_input.setEnabled)
+        self.git_deploy_artifact_cb.toggled.connect(self.git_external_dir_input.setEnabled)
+        adv_hooks_layout.addWidget(self.git_deploy_artifact_cb)
+        adv_hooks_layout.addWidget(self.git_external_repo_input)
+        adv_hooks_layout.addLayout(ext_repo_row)
+
+        hooks_box_layout.addWidget(self.git_advanced_hooks_group)
+
         self.git_hooks_enable_cb.toggled.connect(self.git_hooks_container.setEnabled)
         self.git_hooks_enable_cb.toggled.connect(self.git_tags_enable_cb.setEnabled)
         self.git_hooks_enable_cb.toggled.connect(self.git_smart_tests_cb.setEnabled)
+        self.git_hooks_enable_cb.toggled.connect(self.git_advanced_hooks_group.setEnabled)
         self.git_hooks_enable_cb.toggled.connect(lambda _: self._update_summary())
         self.git_tags_enable_cb.toggled.connect(lambda _: self._update_summary())
         self.git_smart_tests_cb.toggled.connect(lambda _: self._update_summary())
+        self.git_renew_tag_cb.toggled.connect(lambda _: self._update_summary())
+        self.git_build_exe_cb.toggled.connect(lambda _: self._update_summary())
+        self.git_deploy_artifact_cb.toggled.connect(lambda _: self._update_summary())
         tab2_layout.addWidget(self.git_hooks_box)
 
         # Agenten Box
@@ -875,8 +939,11 @@ class MainWindow(QMainWindow):
         if hasattr(self, "git_hooks_enable_cb") and self.git_hooks_enable_cb.isChecked():
             hooks_count = sum(1 for cb in self.hook_checkboxes.values() if cb.isChecked())
             tags_txt = " + Tags" if hasattr(self, "git_tags_enable_cb") and self.git_tags_enable_cb.isChecked() else ""
+            renew_txt = " + Tag-Push" if hasattr(self, "git_renew_tag_cb") and self.git_renew_tag_cb.isChecked() else ""
             smart_txt = " + Smart-Tests" if hasattr(self, "git_smart_tests_cb") and self.git_smart_tests_cb.isChecked() else ""
-            features.append(f"🛡️ {hooks_count} Hooks{tags_txt}{smart_txt}")
+            build_txt = " + Build" if hasattr(self, "git_build_exe_cb") and self.git_build_exe_cb.isChecked() else ""
+            deploy_txt = " + Deploy" if hasattr(self, "git_deploy_artifact_cb") and self.git_deploy_artifact_cb.isChecked() else ""
+            features.append(f"🛡️ {hooks_count} Hooks{tags_txt}{renew_txt}{smart_txt}{build_txt}{deploy_txt}")
         else:
             features.append("🛡️ Hooks inaktiv")
 
@@ -1518,6 +1585,15 @@ class MainWindow(QMainWindow):
             "enable_git_hooks": self.git_hooks_enable_cb.isChecked(),
             "enable_git_tags": self.git_tags_enable_cb.isChecked() if hasattr(self, "git_tags_enable_cb") else False,
             "enable_smart_tests": self.git_smart_tests_cb.isChecked() if hasattr(self, "git_smart_tests_cb") else True,
+            "enable_renew_tag_on_push": self.git_renew_tag_cb.isChecked() if hasattr(self, "git_renew_tag_cb") else False,
+            "test_cmd": self.git_test_cmd_input.text().strip() if (hasattr(self, "git_custom_test_cb") and self.git_custom_test_cb.isChecked()) else None,
+            "enable_build_exe": self.git_build_exe_cb.isChecked() if hasattr(self, "git_build_exe_cb") else False,
+            "build_cmd": self.git_build_cmd_input.text().strip() if (hasattr(self, "git_build_exe_cb") and self.git_build_exe_cb.isChecked()) else None,
+            "artifact_pattern": self.git_artifact_pattern_input.text().strip() if (hasattr(self, "git_artifact_pattern_input") and (self.git_build_exe_cb.isChecked() or self.git_deploy_artifact_cb.isChecked())) else None,
+            "enable_deploy_artifact": self.git_deploy_artifact_cb.isChecked() if hasattr(self, "git_deploy_artifact_cb") else False,
+            "external_repo": self.git_external_repo_input.text().strip() if (hasattr(self, "git_deploy_artifact_cb") and self.git_deploy_artifact_cb.isChecked()) else None,
+            "external_repo_branch": self.git_external_branch_input.text().strip() if (hasattr(self, "git_deploy_artifact_cb") and self.git_deploy_artifact_cb.isChecked()) else None,
+            "external_repo_dir": self.git_external_dir_input.text().strip() if (hasattr(self, "git_deploy_artifact_cb") and self.git_deploy_artifact_cb.isChecked()) else None,
             "selected_git_hooks": [
                 h_id for h_id, cb in self.hook_checkboxes.items() if cb.isChecked()
             ],

@@ -28,6 +28,10 @@ class TestMainWindow(unittest.TestCase):
         self.assertTrue(self.window.git_hooks_enable_cb.isChecked())
         self.assertTrue(self.window.git_tags_enable_cb.isChecked())
         self.assertTrue(self.window.git_smart_tests_cb.isChecked())
+        self.assertTrue(hasattr(self.window, "git_renew_tag_cb"))
+        self.assertTrue(hasattr(self.window, "git_build_exe_cb"))
+        self.assertTrue(hasattr(self.window, "git_deploy_artifact_cb"))
+        self.assertTrue(hasattr(self.window, "git_custom_test_cb"))
         expected_hooks = [
             "pre-commit", "commit-msg", "prepare-commit-msg", "post-commit",
             "post-checkout", "post-merge", "pre-rebase", "pre-push"
@@ -286,15 +290,42 @@ class TestMainWindow(unittest.TestCase):
 
 
     def test_retrofit_dialog_smart_tests_option(self):
-        """Verifies RetrofitDialog exposes smart tests checkbox and toggles it."""
+        """Verifies RetrofitDialog exposes smart tests and push pipeline controls."""
         dialog = RetrofitDialog(self.window.template_manager, parent=self.window)
         self.assertTrue(hasattr(dialog, "enable_smart_tests_cb"))
         self.assertTrue(dialog.enable_smart_tests_cb.isChecked())
-        # Disable hooks -> smart tests checkbox should be disabled
+        self.assertTrue(hasattr(dialog, "enable_renew_tag_cb"))
+        self.assertTrue(hasattr(dialog, "enable_custom_test_cb"))
+        self.assertTrue(hasattr(dialog, "enable_build_exe_cb"))
+        self.assertTrue(hasattr(dialog, "enable_deploy_artifact_cb"))
+        self.assertTrue(hasattr(dialog, "advanced_hooks_group"))
+
+        # Test sub-control enabling
+        dialog.enable_custom_test_cb.setChecked(True)
+        self.assertTrue(dialog.test_cmd_input.isEnabled())
+        dialog.enable_custom_test_cb.setChecked(False)
+        self.assertFalse(dialog.test_cmd_input.isEnabled())
+
+        dialog.enable_build_exe_cb.setChecked(True)
+        self.assertTrue(dialog.build_cmd_input.isEnabled())
+        self.assertTrue(dialog.artifact_pattern_input.isEnabled())
+        dialog.enable_build_exe_cb.setChecked(False)
+        self.assertFalse(dialog.build_cmd_input.isEnabled())
+
+        dialog.enable_deploy_artifact_cb.setChecked(True)
+        self.assertTrue(dialog.external_repo_input.isEnabled())
+        self.assertTrue(dialog.external_branch_input.isEnabled())
+        self.assertTrue(dialog.external_dir_input.isEnabled())
+        dialog.enable_deploy_artifact_cb.setChecked(False)
+        self.assertFalse(dialog.external_repo_input.isEnabled())
+
+        # Disable hooks -> smart tests and advanced options should be disabled
         dialog.enable_hooks_cb.setChecked(False)
         self.assertFalse(dialog.enable_smart_tests_cb.isEnabled())
+        self.assertFalse(dialog.advanced_hooks_group.isEnabled())
         dialog.enable_hooks_cb.setChecked(True)
         self.assertTrue(dialog.enable_smart_tests_cb.isEnabled())
+        self.assertTrue(dialog.advanced_hooks_group.isEnabled())
         dialog.close()
 
 
