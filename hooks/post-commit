@@ -462,6 +462,23 @@ raw = subprocess.check_output(
     text=True
 )
 
+def format_bare_urls(text: str) -> str:
+    # Maskiere bestehende Code-Spans, Markdown-Links und bereits in <> eingeschlossene URLs
+    pattern = re.compile(
+        r'(`[^`]+`|\[[^\]]*\]\([^)]*\)|<https?://[^\s>]+>)|(?P<bare>https?://[^\s<>()`"\'\]]+)'
+    )
+    def repl(match):
+        bare = match.group("bare")
+        if not bare:
+            return match.group(0)
+        # Satzzeichen am Ende der URL abtrennen (z. B. Punkt, Komma, Semikolon, Doppelpunkt)
+        trailing = ""
+        while bare and bare[-1] in ".,;:!?":
+            trailing = bare[-1] + trailing
+            bare = bare[:-1]
+        return f"<{bare}>{trailing}" if bare else match.group(0)
+    return pattern.sub(repl, text)
+
 commits = []
 curr = None
 for line in raw.splitlines():
@@ -469,7 +486,8 @@ for line in raw.splitlines():
         parts = line[7:].split("\t", 2)
         if len(parts) == 3:
             h, ad, s = parts
-            curr = {"hash": h, "line": f"{ad} ({h}): {s}", "files": []}
+            s_formatted = format_bare_urls(s)
+            curr = {"hash": h, "line": f"{ad} ({h}): {s_formatted}", "files": []}
             commits.append(curr)
     elif curr and line.strip():
         curr["files"].append(line.strip())

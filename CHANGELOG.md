@@ -1,8 +1,13 @@
 # Changelog
 
+## SemVer v3.0.2
+
+- 2026-11-01 (d5ff0fc): fix: fix changelog repeatedly getting a raw url after it was commited without proper formatting - added additional linting step at the end
+
 ## SemVer v3.0.1
 
-- 2026-10-28 (a3d3ebc): feat: add a more fine granular configuration option for the git hook lifecycle
+- 2026-10-28 (96e5c69): Merge pull request #5 from TGBox/finegranular-setup
+- 2026-10-28 (ad12cfc): feat: add a more fine granular configuration option for the git hook lifecycle
 - 2026-10-26 (ff1a42b): Merge pull request #4 from TGBox/smart-tests
 - 2026-10-26 (4a8c5cf): fix: change pre push hook templates to check for changed code files before starting a full test suite
 - 2026-10-26 (0342028): Merge pull request #3 from TGBox/ai-decide
