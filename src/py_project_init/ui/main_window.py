@@ -1,4 +1,5 @@
 import json
+import urllib.parse
 import re
 import sys
 import shutil
@@ -1516,7 +1517,11 @@ class MainWindow(QMainWindow):
         self.gitlab_ssh_cb.setChecked(self.settings.value("gitlab_use_ssh", False, type=bool))
         self._load_gitlab_token()
 
-        self.github_url_input.setText(self.settings.value("github_url", "https://github.com"))
+        gh_url = self.settings.value("github_url", "https://github.com")
+        parsed_gh = urllib.parse.urlparse(gh_url if "://" in gh_url else f"https://{gh_url}")
+        if (parsed_gh.hostname or "").lower() in ("github.com", "www.github.com", "api.github.com"):
+            gh_url = "https://github.com"
+        self.github_url_input.setText(gh_url)
         self.github_owner_input.setText(self.settings.value("github_owner", ""))
         idx_gh = self.github_visibility_combo.findData(self.settings.value("github_visibility", "private"))
         if idx_gh >= 0:
@@ -1617,7 +1622,11 @@ class MainWindow(QMainWindow):
             },
             "github": {
                 "enabled": self.remote_github_rb.isChecked(),
-                "url": self.github_url_input.text().strip() or "https://github.com",
+                "url": (
+                    "https://github.com"
+                    if (urllib.parse.urlparse(self.github_url_input.text().strip() if "://" in self.github_url_input.text().strip() else f"https://{self.github_url_input.text().strip()}").hostname or "").lower() in ("github.com", "www.github.com", "api.github.com")
+                    else (self.github_url_input.text().strip() or "https://github.com")
+                ),
                 "token": self.github_token_input.text().strip(),
                 "owner": self.github_owner_input.text().strip(),
                 "visibility": self.github_visibility_combo.currentData(),
@@ -1881,21 +1890,26 @@ class MainWindow(QMainWindow):
     # ── GitHub ──────────────────────────────────────────────────────────────
 
     def _load_github_token(self):
-        url = self.github_url_input.text().strip() or "https://github.com"
+        raw_url = self.github_url_input.text().strip() or "https://github.com"
+        parsed = urllib.parse.urlparse(raw_url if "://" in raw_url else f"https://{raw_url}")
+        url = "https://github.com" if (parsed.hostname or "").lower() in ("github.com", "www.github.com", "api.github.com") else raw_url
         if not self.github_token_input.text().strip():
             token = load_github_token(url)
             if token:
                 self.github_token_input.setText(token)
 
     def _save_github_settings(self):
+        raw_url = self.github_url_input.text().strip() or "https://github.com"
+        parsed = urllib.parse.urlparse(raw_url if "://" in raw_url else f"https://{raw_url}")
+        url = "https://github.com" if (parsed.hostname or "").lower() in ("github.com", "www.github.com", "api.github.com") else raw_url
+
         self.settings.setValue("github_enabled", self.remote_github_rb.isChecked())
-        self.settings.setValue("github_url", self.github_url_input.text().strip())
+        self.settings.setValue("github_url", url)
         self.settings.setValue("github_owner", self.github_owner_input.text().strip())
         self.settings.setValue("github_visibility", self.github_visibility_combo.currentData())
         self.settings.setValue("github_work_branch", self.github_work_branch_input.text().strip())
         self.settings.setValue("github_create_pr", self.github_pr_cb.isChecked())
         self.settings.setValue("github_use_ssh", self.github_ssh_cb.isChecked())
-        url = self.github_url_input.text().strip() or "https://github.com"
         token = self.github_token_input.text().strip()
         if url and token and self.github_save_token_cb.isChecked():
             if not save_github_token(url, token):
@@ -1904,7 +1918,15 @@ class MainWindow(QMainWindow):
             delete_github_token(url)
 
     def _test_github_connection(self):
-        url = self.github_url_input.text().strip() or "https://github.com"
+        raw_url = self.github_url_input.text().strip() or "https://github.com"
+        parsed = urllib.parse.urlparse(raw_url if "://" in raw_url else f"https://{raw_url}")
+        if (parsed.hostname or "").lower() in ("github.com", "www.github.com", "api.github.com"):
+            url = "https://github.com"
+            if raw_url != url:
+                self.github_url_input.setText(url)
+        else:
+            url = raw_url
+
         token = self.github_token_input.text().strip()
         if not token:
             QMessageBox.warning(self, "GitHub", "Bitte ein GitHub Personal Access Token eintragen.")
@@ -1912,17 +1934,24 @@ class MainWindow(QMainWindow):
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             client = GitHubClient(url, token, timeout=10)
-            user = client.current_user()
+            user = client.current_user() or {}
             user_login = user.get("login", "")
             user_name = user.get("name") or user_login
             msg = f"✔ Erfolgreich angemeldet als {user_name} (@{user_login})."
             owner = self.github_owner_input.text().strip()
-            if owner and owner.lower() != user_login.lower():
-                try:
-                    org_info = client._request("GET", f"/orgs/{client._enc(owner)}")
-                    msg += f"\n✔ Organisation '{org_info.get('login', owner)}' gefunden und zugänglich."
-                except GitHubError as org_err:
-                    msg += f"\n⚠️ Organisation '{owner}' konnte nicht verifiziert werden: {org_err}"
+            if owner:
+                if owner.lower() == user_login.lower() or (user.get("name") and owner.lower() == user.get("name", "").lower()):
+                    msg += f"\n✔ Verwende persönlichen Account '@{user_login}'."
+                elif not re.match(r'^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$', owner):
+                    msg += f"\nℹ️ '{owner}' ist ein Anzeigename (kein GitHub-Organisations-Handle).\nRepositories werden unter deinem persönlichen Account '@{user_login}' angelegt."
+                else:
+                    try:
+                        org_info = client._request("GET", f"/orgs/{client._enc(owner)}")
+                        msg += f"\n✔ Organisation '{org_info.get('login', owner)}' gefunden und zugänglich."
+                    except GitHubError as org_err:
+                        msg += f"\n⚠️ Organisation '{owner}' konnte nicht verifiziert werden: {org_err}"
+            else:
+                msg += f"\n✔ Repositories werden unter deinem persönlichen Account '@{user_login}' angelegt."
         except GitHubError as e:
             QApplication.restoreOverrideCursor()
             QMessageBox.critical(self, "GitHub-Verbindung fehlgeschlagen", str(e))

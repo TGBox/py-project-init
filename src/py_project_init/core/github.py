@@ -1,6 +1,7 @@
 """Minimal GitHub REST client (stdlib only) plus secure token storage helpers."""
 import json
 import os
+import re
 import shutil
 import ssl
 import subprocess
@@ -30,17 +31,23 @@ def _ssl_context() -> ssl.SSLContext:
 
 class GitHubClient:
     def __init__(self, base_url: str = DEFAULT_GITHUB_WEB, token: str = "", timeout: float = 20.0):
-        url = (base_url or DEFAULT_GITHUB_WEB).strip().rstrip("/")
-        if not url or url in ("https://github.com", "http://github.com"):
+        raw_url = (base_url or DEFAULT_GITHUB_WEB).strip().rstrip("/")
+        if not raw_url:
+            raw_url = DEFAULT_GITHUB_WEB
+        parsed = urllib.parse.urlparse(raw_url if "://" in raw_url else f"https://{raw_url}")
+        host = (parsed.hostname or "").lower()
+
+        # Any URL targeting github.com (e.g. https://github.com or https://github.com/profile) uses api.github.com
+        if host in ("github.com", "www.github.com", "api.github.com") or not host:
             self.web_url = DEFAULT_GITHUB_WEB
             self.api_url = DEFAULT_GITHUB_API
         else:
-            if url.endswith("/api/v3"):
-                self.api_url = url
-                self.web_url = url[:-7]
+            if raw_url.endswith("/api/v3"):
+                self.api_url = raw_url
+                self.web_url = raw_url[:-7]
             else:
-                self.web_url = url
-                self.api_url = f"{url}/api/v3"
+                self.web_url = raw_url
+                self.api_url = f"{raw_url}/api/v3"
 
         self.token = token.strip()
         self.timeout = timeout
@@ -119,15 +126,22 @@ class GitHubClient:
         if visibility in ("private", "public", "internal"):
             data["visibility"] = visibility
 
-        # If owner is specified and not the current user, create under organization
+        # If owner is specified, check if it's the current user or an organization
         if owner:
             curr_login = ""
+            curr_name = ""
             try:
-                curr_login = self.current_user().get("login", "")
+                u = self.current_user() or {}
+                curr_login = u.get("login", "")
+                curr_name = u.get("name", "")
             except Exception:
                 pass
 
-            if curr_login and owner.lower() != curr_login.lower():
+            is_self = (curr_login and owner.lower() == curr_login.lower()) or \
+                      (curr_name and owner.lower() == curr_name.lower()) or \
+                      (not re.match(r'^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$', owner))
+
+            if not is_self and curr_login:
                 path = f"/orgs/{self._enc(owner)}/repos"
                 return self._request("POST", path, data)
 
@@ -148,12 +162,21 @@ class GitHubClient:
 # ── Token storage (Windows Credential Manager via keyring, env var, gh CLI fallback) ──
 
 def load_token(base_url: str = DEFAULT_GITHUB_WEB) -> str:
-    url_key = (base_url or DEFAULT_GITHUB_WEB).strip().rstrip("/")
+    raw_url = (base_url or DEFAULT_GITHUB_WEB).strip().rstrip("/")
+    candidates = [raw_url]
+
+    parsed = urllib.parse.urlparse(raw_url if "://" in raw_url else f"https://{raw_url}")
+    host = (parsed.hostname or "").lower()
+    if host in ("github.com", "www.github.com", "api.github.com"):
+        if DEFAULT_GITHUB_WEB not in candidates:
+            candidates.append(DEFAULT_GITHUB_WEB)
+
     try:
         import keyring
-        token = keyring.get_password(KEYRING_SERVICE, url_key)
-        if token:
-            return token
+        for key in candidates:
+            token = keyring.get_password(KEYRING_SERVICE, key)
+            if token:
+                return token
     except Exception:
         pass
 
@@ -180,19 +203,40 @@ def load_token(base_url: str = DEFAULT_GITHUB_WEB) -> str:
 
 def save_token(base_url: str, token: str) -> bool:
     """Stores the token in the OS credential store. Returns False if unavailable."""
-    url_key = (base_url or DEFAULT_GITHUB_WEB).strip().rstrip("/")
+    raw_url = (base_url or DEFAULT_GITHUB_WEB).strip().rstrip("/")
+    keys_to_save = [raw_url]
+    parsed = urllib.parse.urlparse(raw_url if "://" in raw_url else f"https://{raw_url}")
+    host = (parsed.hostname or "").lower()
+    if host in ("github.com", "www.github.com", "api.github.com"):
+        if DEFAULT_GITHUB_WEB not in keys_to_save:
+            keys_to_save.append(DEFAULT_GITHUB_WEB)
+
     try:
         import keyring
-        keyring.set_password(KEYRING_SERVICE, url_key, token)
-        return True
+        success = False
+        for k in keys_to_save:
+            keyring.set_password(KEYRING_SERVICE, k, token)
+            success = True
+        return success
     except Exception:
         return False
 
 
 def delete_token(base_url: str = DEFAULT_GITHUB_WEB) -> None:
-    url_key = (base_url or DEFAULT_GITHUB_WEB).strip().rstrip("/")
+    raw_url = (base_url or DEFAULT_GITHUB_WEB).strip().rstrip("/")
+    keys_to_delete = [raw_url]
+    parsed = urllib.parse.urlparse(raw_url if "://" in raw_url else f"https://{raw_url}")
+    host = (parsed.hostname or "").lower()
+    if host in ("github.com", "www.github.com", "api.github.com"):
+        if DEFAULT_GITHUB_WEB not in keys_to_delete:
+            keys_to_delete.append(DEFAULT_GITHUB_WEB)
+
     try:
         import keyring
-        keyring.delete_password(KEYRING_SERVICE, url_key)
+        for k in keys_to_delete:
+            try:
+                keyring.delete_password(KEYRING_SERVICE, k)
+            except Exception:
+                pass
     except Exception:
         pass

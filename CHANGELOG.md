@@ -1,8 +1,13 @@
 # Changelog
 
+## SemVer v3.0.3
+
+- 2026-11-01 (c9347d0): fix: fix unclear ui input fields and add personalized fallback
+
 ## SemVer v3.0.2
 
-- 2026-11-01 (d5ff0fc): fix: fix changelog repeatedly getting a raw url after it was commited without proper formatting - added additional linting step at the end
+- 2026-11-01 (50dfdd2): Merge pull request #6 from TGBox/fix/changelog-link
+- 2026-11-01 (93b0e6b): fix: fix changelog repeatedly getting a raw url after it was commited without proper formatting - added additional linting step at the end
 
 ## SemVer v3.0.1
 

@@ -483,12 +483,41 @@ class TemplateManager:
         name = context["project_name"]
         default_branch = context.get("default_branch") or "main"
         work_branch = (cfg.get("work_branch") or "").strip() or default_branch
-        owner = (cfg.get("owner") or cfg.get("namespace") or "").strip().strip("/")
+        raw_owner = (cfg.get("owner") or cfg.get("namespace") or "").strip().strip("/")
 
         try:
             client = self.github_client_factory(cfg.get("url", ""), cfg.get("token", ""))
+            curr_user = {}
+            try:
+                curr_user = client.current_user() or {}
+            except GitHubError:
+                raise
+            except Exception:
+                pass
+            curr_login = curr_user.get("login", "")
+            curr_name = curr_user.get("name", "")
+
+            # Intelligente Owner-Erkennung (persönlicher Account vs. Organisation)
+            create_owner = None
+            if raw_owner:
+                is_self = (curr_login and raw_owner.lower() == curr_login.lower()) or \
+                          (curr_name and raw_owner.lower() == curr_name.lower()) or \
+                          (not re.match(r'^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$', raw_owner))
+                if is_self:
+                    if curr_login and raw_owner.lower() != curr_login.lower():
+                        log_callback(f"Hinweis: '{raw_owner}' ist ein Anzeigename. Verwende GitHub-Account '@{curr_login}'.")
+                    owner = curr_login or raw_owner
+                    create_owner = None
+                else:
+                    owner = raw_owner
+                    create_owner = raw_owner
+            else:
+                owner = curr_login or "user"
+                create_owner = None
+
             if not owner:
-                owner = client.current_user().get("login", "")
+                owner = curr_login or "user"
+
             full_path = f"{owner}/{name}"
             repo = client.get_repo(owner, name)
             if repo and not repo.get("empty_repo") and repo.get("size", 0) > 0:
@@ -503,7 +532,7 @@ class TemplateManager:
                 log_callback(f"GitHub: Lege Repository '{full_path}' an...")
                 repo = client.create_repo(
                     name,
-                    owner=cfg.get("owner"),
+                    owner=create_owner,
                     default_branch=default_branch,
                     visibility=cfg.get("visibility") or "private",
                     description=context.get("description", ""),

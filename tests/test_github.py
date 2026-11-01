@@ -174,6 +174,25 @@ class TestGitHubIntegration(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(_git(target, "branch", "--show-current"), "main")
 
+    def test_url_resolution_with_profile_and_trailing_slash(self):
+        # A URL pointing to a profile or org on github.com still resolves to the official API
+        c1 = GitHubClient("https://github.com/TGBox", "tok")
+        self.assertEqual(c1.web_url, "https://github.com")
+        self.assertEqual(c1.api_url, "https://api.github.com")
+
+        c2 = GitHubClient("https://www.github.com/TGBox/", "tok")
+        self.assertEqual(c2.web_url, "https://github.com")
+        self.assertEqual(c2.api_url, "https://api.github.com")
+
+    def test_display_name_as_owner_resolves_to_personal_account(self):
+        fake, calls = _make_fake_client(self.server)
+        ctx = self._context(owner="Daniel Rösch")
+        target, problems = self._generate(fake, ctx)
+        self.assertEqual(problems, [])
+        # owner was a display name -> created under current user (owner=None)
+        self.assertEqual(calls["create_repo"], [("hub-net", None, "main", "private")])
+
+
 
 class TestGitHubClient(unittest.TestCase):
     def test_url_resolution(self):
