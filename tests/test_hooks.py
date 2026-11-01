@@ -939,6 +939,65 @@ class TestGitHooks(unittest.TestCase):
             self.assertTrue(deployed_file.exists(), "Deployed artifact not found in external repository!")
             self.assertEqual(deployed_file.read_text(encoding="utf-8"), "BINARY CONTENT")
 
+    def test_post_commit_changelog_bare_url_markdownlint_wrapping(self):
+        """Verifies that bare URLs in commit messages are wrapped in <> in CHANGELOG.md and preserved across commits."""
+        import shutil
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+
+            hooks_dir = proj / ".git" / "hooks"
+            shutil.copy2(self.hooks_dir / "pre-commit", hooks_dir / "pre-commit")
+            shutil.copy2(self.hooks_dir / "commit-msg", hooks_dir / "commit-msg")
+            shutil.copy2(self.hooks_dir / "post-commit", hooks_dir / "post-commit")
+
+            pyproject = proj / "pyproject.toml"
+            pyproject.write_text('[project]\nname = "url-test"\nversion = "1.0.0"\n', encoding="utf-8")
+            (proj / "app.py").write_text("print('v1')\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+
+            env = os.environ.copy()
+            env["GIT_HOOKS_NON_INTERACTIVE"] = "1"
+
+            # 1. Commit with bare URLs, already-wrapped URLs, and markdown links
+            res1 = subprocess.run(
+                [
+                    "git",
+                    "commit",
+                    "-m",
+                    "feat: integrate https://api.example.com/v1, see <https://docs.example.com> and [Guide](https://guide.example.com).",
+                ],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res1.returncode, 0, f"First commit failed: {res1.stderr}")
+
+            changelog1 = (proj / "CHANGELOG.md").read_text(encoding="utf-8")
+            self.assertIn("<https://api.example.com/v1>,", changelog1)
+            self.assertIn("<https://docs.example.com>", changelog1)
+            self.assertNotIn("<<https://docs.example.com>>", changelog1)
+            self.assertIn("[Guide](https://guide.example.com).", changelog1)
+
+            # 2. Second commit -> verify the first commit's URL stays wrapped in <> upon regeneration
+            (proj / "app.py").write_text("print('v2')\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            res2 = subprocess.run(
+                ["git", "commit", "-m", "fix: resolve issue from https://github.com/org/repo/issues/42"],
+                cwd=proj,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res2.returncode, 0, f"Second commit failed: {res2.stderr}")
+
+            changelog2 = (proj / "CHANGELOG.md").read_text(encoding="utf-8")
+            self.assertIn("<https://api.example.com/v1>,", changelog2)
+            self.assertIn("<https://github.com/org/repo/issues/42>", changelog2)
+
 
 if __name__ == "__main__":
     unittest.main()
