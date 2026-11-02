@@ -209,5 +209,59 @@ class TestCLI(unittest.TestCase):
             )
 
 
+    def test_cli_linter_options(self):
+        """Verifies CLI flags for markdownlint, jsonlint, yamllint, and lintgate."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out = io.StringIO()
+            with patch("sys.stdout", out):
+                code = run_cli([
+                    "cli_linter_app",
+                    "-t", "python-cli",
+                    "-p", temp_dir,
+                    "--markdown-lint-cmd", "markdownlint-cli2 **/*.md",
+                    "--json-lint-cmd", "python -m json.tool",
+                    "--yaml-lint",
+                    "--yaml-lint-cmd", "yamllint .",
+                    "--lint-gate",
+                    "--lint-cmd", "uv run ruff check",
+                ])
+            self.assertEqual(code, 0)
+            target = Path(temp_dir) / "cli_linter_app"
+            self.assertTrue(target.is_dir())
+
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.markdownlint"], cwd=target, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.markdownlintcmd"], cwd=target, text=True).strip(),
+                "markdownlint-cli2 **/*.md"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.jsonlint"], cwd=target, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.jsonlintcmd"], cwd=target, text=True).strip(),
+                "python -m json.tool"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.yamllint"], cwd=target, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.yamllintcmd"], cwd=target, text=True).strip(),
+                "yamllint ."
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.lintgate"], cwd=target, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.lintcmd"], cwd=target, text=True).strip(),
+                "uv run ruff check"
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

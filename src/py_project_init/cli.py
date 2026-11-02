@@ -79,6 +79,42 @@ def run_cli(args: list[str] | None = None) -> int:
         help="Tag vor jedem Push automatisch auf HEAD erneuern und mitpushen (hooks.renewtagonpush)",
     )
     parser.add_argument(
+        "--no-markdown-lint",
+        action="store_true",
+        help="Markdown-Linter vor Push deaktivieren (hooks.markdownlint, Standard: aktiv)",
+    )
+    parser.add_argument(
+        "--markdown-lint-cmd",
+        help="Benutzerdefinierter Markdown-Linter-Befehl (hooks.markdownlintcmd)",
+    )
+    parser.add_argument(
+        "--no-json-lint",
+        action="store_true",
+        help="JSON-Linter vor Push deaktivieren (hooks.jsonlint, Standard: aktiv)",
+    )
+    parser.add_argument(
+        "--json-lint-cmd",
+        help="Benutzerdefinierter JSON-Linter-Befehl (hooks.jsonlintcmd)",
+    )
+    parser.add_argument(
+        "--yaml-lint",
+        action="store_true",
+        help="YAML-Linter vor Push aktivieren (hooks.yamllint, Standard: inaktiv)",
+    )
+    parser.add_argument(
+        "--yaml-lint-cmd",
+        help="Benutzerdefinierter YAML-Linter-Befehl (hooks.yamllintcmd)",
+    )
+    parser.add_argument(
+        "--lint-gate",
+        action="store_true",
+        help="Code-Linter Gate vor Push erzwingen (hooks.lintgate, Standard: inaktiv)",
+    )
+    parser.add_argument(
+        "--lint-cmd",
+        help="Benutzerdefinierter Code-Linter-Befehl für das Linter-Gate (hooks.lintcmd)",
+    )
+    parser.add_argument(
         "--test-cmd",
         help="Benutzerdefinierter Testbefehl im Pre-Push-Hook (hooks.testcmd)",
     )
@@ -271,6 +307,14 @@ def run_cli(args: list[str] | None = None) -> int:
             external_repo=parsed.external_repo,
             external_repo_branch=parsed.external_repo_branch,
             external_repo_dir=parsed.external_repo_dir,
+            enable_markdown_lint=not parsed.no_markdown_lint,
+            markdown_lint_cmd=parsed.markdown_lint_cmd,
+            enable_json_lint=not parsed.no_json_lint,
+            json_lint_cmd=parsed.json_lint_cmd,
+            enable_yaml_lint=parsed.yaml_lint,
+            yaml_lint_cmd=parsed.yaml_lint_cmd,
+            enable_lint_gate=parsed.lint_gate,
+            lint_cmd=parsed.lint_cmd,
         )
         print(f"\n✔ Git-Hooks erfolgreich in '{target_path}' nachgerüstet.")
         return 0
@@ -335,6 +379,14 @@ def run_cli(args: list[str] | None = None) -> int:
         "external_repo": parsed.external_repo,
         "external_repo_branch": parsed.external_repo_branch,
         "external_repo_dir": parsed.external_repo_dir,
+        "enable_markdown_lint": not parsed.no_markdown_lint,
+        "markdown_lint_cmd": parsed.markdown_lint_cmd,
+        "enable_json_lint": not parsed.no_json_lint,
+        "json_lint_cmd": parsed.json_lint_cmd,
+        "enable_yaml_lint": parsed.yaml_lint,
+        "yaml_lint_cmd": parsed.yaml_lint_cmd,
+        "enable_lint_gate": parsed.lint_gate,
+        "lint_cmd": parsed.lint_cmd,
         "selected_git_hooks": all_hooks,
         "enable_agent_configs": not parsed.no_agents,
         "selected_agent_rules": recommended.get("rules", []),

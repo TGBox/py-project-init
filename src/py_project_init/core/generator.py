@@ -204,6 +204,14 @@ class TemplateManager:
             external_repo = context.get("external_repo")
             external_repo_branch = context.get("external_repo_branch")
             external_repo_dir = context.get("external_repo_dir")
+            enable_markdown_lint = context.get("enable_markdown_lint", True)
+            markdown_lint_cmd = context.get("markdown_lint_cmd")
+            enable_json_lint = context.get("enable_json_lint", True)
+            json_lint_cmd = context.get("json_lint_cmd")
+            enable_yaml_lint = context.get("enable_yaml_lint", False)
+            yaml_lint_cmd = context.get("yaml_lint_cmd")
+            enable_lint_gate = context.get("enable_lint_gate", False)
+            lint_cmd = context.get("lint_cmd")
 
             self._install_git_hooks(
                 target_dir,
@@ -220,6 +228,14 @@ class TemplateManager:
                 external_repo=external_repo,
                 external_repo_branch=external_repo_branch,
                 external_repo_dir=external_repo_dir,
+                enable_markdown_lint=enable_markdown_lint,
+                markdown_lint_cmd=markdown_lint_cmd,
+                enable_json_lint=enable_json_lint,
+                json_lint_cmd=json_lint_cmd,
+                enable_yaml_lint=enable_yaml_lint,
+                yaml_lint_cmd=yaml_lint_cmd,
+                enable_lint_gate=enable_lint_gate,
+                lint_cmd=lint_cmd,
             )
 
         # 4. Agenten-Konfiguration (.agents/ & AGENTS.md)
@@ -684,8 +700,16 @@ class TemplateManager:
         external_repo: str | None = None,
         external_repo_branch: str | None = None,
         external_repo_dir: str | None = None,
+        enable_markdown_lint: bool = True,
+        markdown_lint_cmd: str | None = None,
+        enable_json_lint: bool = True,
+        json_lint_cmd: str | None = None,
+        enable_yaml_lint: bool = False,
+        yaml_lint_cmd: str | None = None,
+        enable_lint_gate: bool = False,
+        lint_cmd: str | None = None,
     ):
-        """Copies selected git hooks to .git/hooks/, sets executable permissions, and configures tags/smart tests/build/deploy if enabled."""
+        """Copies selected git hooks to .git/hooks/, sets executable permissions, and configures tags/smart tests/build/deploy/linters if enabled."""
         git_hooks_dir = target_dir / ".git" / "hooks"
         git_hooks_dir.mkdir(parents=True, exist_ok=True)
 
@@ -877,6 +901,156 @@ class TemplateManager:
             try:
                 subprocess.run(
                     ["git", "config", "hooks.deployartifact", "false"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+            except Exception:
+                pass
+
+        if enable_markdown_lint:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.markdownlint", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: Markdown-Linter (hooks.markdownlint) aktiviert.")
+                if markdown_lint_cmd and markdown_lint_cmd.strip():
+                    subprocess.run(
+                        ["git", "config", "hooks.markdownlintcmd", markdown_lint_cmd.strip()],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+                    log_callback(f"Git-Konfiguration: Markdown-Linter-Befehl (hooks.markdownlintcmd='{markdown_lint_cmd.strip()}') gesetzt.")
+                else:
+                    subprocess.run(
+                        ["git", "config", "--unset", "hooks.markdownlintcmd"],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+            except Exception as e:
+                log_callback(f"Warnung: hooks.markdownlint konnte nicht konfiguriert werden: {e}")
+        else:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.markdownlint", "false"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: Markdown-Linter (hooks.markdownlint) deaktiviert.")
+            except Exception:
+                pass
+
+        if enable_json_lint:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.jsonlint", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: JSON-Linter (hooks.jsonlint) aktiviert.")
+                if json_lint_cmd and json_lint_cmd.strip():
+                    subprocess.run(
+                        ["git", "config", "hooks.jsonlintcmd", json_lint_cmd.strip()],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+                    log_callback(f"Git-Konfiguration: JSON-Linter-Befehl (hooks.jsonlintcmd='{json_lint_cmd.strip()}') gesetzt.")
+                else:
+                    subprocess.run(
+                        ["git", "config", "--unset", "hooks.jsonlintcmd"],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+            except Exception as e:
+                log_callback(f"Warnung: hooks.jsonlint konnte nicht konfiguriert werden: {e}")
+        else:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.jsonlint", "false"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: JSON-Linter (hooks.jsonlint) deaktiviert.")
+            except Exception:
+                pass
+
+        if enable_yaml_lint:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.yamllint", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: YAML-Linter (hooks.yamllint) aktiviert.")
+                if yaml_lint_cmd and yaml_lint_cmd.strip():
+                    subprocess.run(
+                        ["git", "config", "hooks.yamllintcmd", yaml_lint_cmd.strip()],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+                    log_callback(f"Git-Konfiguration: YAML-Linter-Befehl (hooks.yamllintcmd='{yaml_lint_cmd.strip()}') gesetzt.")
+                else:
+                    subprocess.run(
+                        ["git", "config", "--unset", "hooks.yamllintcmd"],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+            except Exception as e:
+                log_callback(f"Warnung: hooks.yamllint konnte nicht konfiguriert werden: {e}")
+        else:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.yamllint", "false"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+            except Exception:
+                pass
+
+        if enable_lint_gate:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.lintgate", "true"],
+                    cwd=target_dir,
+                    check=False,
+                    capture_output=True
+                )
+                log_callback("Git-Konfiguration: Code-Linter-Gate (hooks.lintgate) aktiviert.")
+                if lint_cmd and lint_cmd.strip():
+                    subprocess.run(
+                        ["git", "config", "hooks.lintcmd", lint_cmd.strip()],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+                    log_callback(f"Git-Konfiguration: Code-Linter-Befehl (hooks.lintcmd='{lint_cmd.strip()}') gesetzt.")
+                else:
+                    subprocess.run(
+                        ["git", "config", "--unset", "hooks.lintcmd"],
+                        cwd=target_dir,
+                        check=False,
+                        capture_output=True
+                    )
+            except Exception as e:
+                log_callback(f"Warnung: hooks.lintgate konnte nicht konfiguriert werden: {e}")
+        else:
+            try:
+                subprocess.run(
+                    ["git", "config", "hooks.lintgate", "false"],
                     cwd=target_dir,
                     check=False,
                     capture_output=True
@@ -1140,6 +1314,14 @@ class TemplateManager:
         external_repo: str | None = None,
         external_repo_branch: str | None = None,
         external_repo_dir: str | None = None,
+        enable_markdown_lint: bool = True,
+        markdown_lint_cmd: str | None = None,
+        enable_json_lint: bool = True,
+        json_lint_cmd: str | None = None,
+        enable_yaml_lint: bool = False,
+        yaml_lint_cmd: str | None = None,
+        enable_lint_gate: bool = False,
+        lint_cmd: str | None = None,
     ):
         """Retrofits git hooks into an existing project folder."""
         self._init_git_repo(target_dir, log_callback)
@@ -1158,6 +1340,14 @@ class TemplateManager:
             external_repo=external_repo,
             external_repo_branch=external_repo_branch,
             external_repo_dir=external_repo_dir,
+            enable_markdown_lint=enable_markdown_lint,
+            markdown_lint_cmd=markdown_lint_cmd,
+            enable_json_lint=enable_json_lint,
+            json_lint_cmd=json_lint_cmd,
+            enable_yaml_lint=enable_yaml_lint,
+            yaml_lint_cmd=yaml_lint_cmd,
+            enable_lint_gate=enable_lint_gate,
+            lint_cmd=lint_cmd,
         )
 
     def retrofit_agent_configs(

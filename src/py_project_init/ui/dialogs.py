@@ -342,6 +342,50 @@ class RetrofitDialog(QDialog):
         adv_hooks_layout.addWidget(self.external_repo_input)
         adv_hooks_layout.addLayout(ext_repo_row)
 
+        # Markdown-Linter (Standard: aktiv)
+        self.enable_markdown_lint_cb = QCheckBox("Markdown-Linter vor Push ausführen (hooks.markdownlint)")
+        self.enable_markdown_lint_cb.setChecked(True)
+        self.enable_markdown_lint_cb.setToolTip("Validiert vor dem Push geänderte oder vorhandene Markdown-Dateien (*.md) auf Syntax, UTF-8 und defekte Links.")
+        self.markdown_lint_cmd_input = QLineEdit()
+        self.markdown_lint_cmd_input.setPlaceholderText("Markdown-Linter-Befehl (leer lassen für Auto-Erkennung / Built-in)")
+        self.markdown_lint_cmd_input.setEnabled(True)
+        self.enable_markdown_lint_cb.toggled.connect(self.markdown_lint_cmd_input.setEnabled)
+        adv_hooks_layout.addWidget(self.enable_markdown_lint_cb)
+        adv_hooks_layout.addWidget(self.markdown_lint_cmd_input)
+
+        # JSON-Linter (Standard: aktiv)
+        self.enable_json_lint_cb = QCheckBox("JSON-Linter vor Push ausführen (hooks.jsonlint)")
+        self.enable_json_lint_cb.setChecked(True)
+        self.enable_json_lint_cb.setToolTip("Validiert vor dem Push geänderte oder vorhandene JSON-Dateien (*.json) auf syntaktische Gültigkeit.")
+        self.json_lint_cmd_input = QLineEdit()
+        self.json_lint_cmd_input.setPlaceholderText("JSON-Linter-Befehl (leer lassen für Python json.tool / jq)")
+        self.json_lint_cmd_input.setEnabled(True)
+        self.enable_json_lint_cb.toggled.connect(self.json_lint_cmd_input.setEnabled)
+        adv_hooks_layout.addWidget(self.enable_json_lint_cb)
+        adv_hooks_layout.addWidget(self.json_lint_cmd_input)
+
+        # YAML-Linter (Standard: inaktiv)
+        self.enable_yaml_lint_cb = QCheckBox("YAML-Linter vor Push ausführen (hooks.yamllint)")
+        self.enable_yaml_lint_cb.setChecked(False)
+        self.enable_yaml_lint_cb.setToolTip("Validiert vor dem Push geänderte oder vorhandene YAML-Dateien (*.yaml, *.yml) auf syntaktische Korrektheit.")
+        self.yaml_lint_cmd_input = QLineEdit()
+        self.yaml_lint_cmd_input.setPlaceholderText("YAML-Linter-Befehl (leer lassen für PyYAML / yamllint)")
+        self.yaml_lint_cmd_input.setEnabled(False)
+        self.enable_yaml_lint_cb.toggled.connect(self.yaml_lint_cmd_input.setEnabled)
+        adv_hooks_layout.addWidget(self.enable_yaml_lint_cb)
+        adv_hooks_layout.addWidget(self.yaml_lint_cmd_input)
+
+        # Code-Linter Gate (Standard: inaktiv)
+        self.enable_lint_gate_cb = QCheckBox("Code-Linter Gate vor Push erzwingen (hooks.lintgate)")
+        self.enable_lint_gate_cb.setChecked(False)
+        self.enable_lint_gate_cb.setToolTip("Führt vor dem Push einen Code-Linter (z. B. ruff check, eslint, clippy) aus und bricht bei Fehlern ab.")
+        self.lint_cmd_input = QLineEdit()
+        self.lint_cmd_input.setPlaceholderText("z. B. uv run ruff check oder npm run lint (leer lassen für Auto-Erkennung)")
+        self.lint_cmd_input.setEnabled(False)
+        self.enable_lint_gate_cb.toggled.connect(self.lint_cmd_input.setEnabled)
+        adv_hooks_layout.addWidget(self.enable_lint_gate_cb)
+        adv_hooks_layout.addWidget(self.lint_cmd_input)
+
         hooks_layout.addWidget(self.advanced_hooks_group)
 
         self.enable_hooks_cb.toggled.connect(
@@ -454,6 +498,14 @@ class RetrofitDialog(QDialog):
                     external_repo=self.external_repo_input.text().strip() if self.enable_deploy_artifact_cb.isChecked() else None,
                     external_repo_branch=self.external_branch_input.text().strip() if self.enable_deploy_artifact_cb.isChecked() else None,
                     external_repo_dir=self.external_dir_input.text().strip() if self.enable_deploy_artifact_cb.isChecked() else None,
+                    enable_markdown_lint=self.enable_markdown_lint_cb.isChecked(),
+                    markdown_lint_cmd=self.markdown_lint_cmd_input.text().strip() if self.enable_markdown_lint_cb.isChecked() and self.markdown_lint_cmd_input.text().strip() else None,
+                    enable_json_lint=self.enable_json_lint_cb.isChecked(),
+                    json_lint_cmd=self.json_lint_cmd_input.text().strip() if self.enable_json_lint_cb.isChecked() and self.json_lint_cmd_input.text().strip() else None,
+                    enable_yaml_lint=self.enable_yaml_lint_cb.isChecked(),
+                    yaml_lint_cmd=self.yaml_lint_cmd_input.text().strip() if self.enable_yaml_lint_cb.isChecked() and self.yaml_lint_cmd_input.text().strip() else None,
+                    enable_lint_gate=self.enable_lint_gate_cb.isChecked(),
+                    lint_cmd=self.lint_cmd_input.text().strip() if self.enable_lint_gate_cb.isChecked() and self.lint_cmd_input.text().strip() else None,
                 )
             else:
                 self.log_view.append("Keine Git Hooks ausgewählt.")

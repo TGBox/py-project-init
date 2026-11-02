@@ -591,6 +591,14 @@ class TestTemplateManager(unittest.TestCase):
                 external_repo="https://example.com/artifacts.git",
                 external_repo_branch="release-v1",
                 external_repo_dir="binaries",
+                enable_markdown_lint=True,
+                markdown_lint_cmd="markdownlint **/*.md",
+                enable_json_lint=True,
+                json_lint_cmd="python -m json.tool",
+                enable_yaml_lint=True,
+                yaml_lint_cmd="yamllint .",
+                enable_lint_gate=True,
+                lint_cmd="uv run ruff check",
             )
 
             self.assertEqual(
@@ -628,6 +636,34 @@ class TestTemplateManager(unittest.TestCase):
             self.assertEqual(
                 subprocess.check_output(["git", "config", "--get", "hooks.externalrepodir"], cwd=proj_dir, text=True).strip(),
                 "binaries"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.markdownlint"], cwd=proj_dir, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.markdownlintcmd"], cwd=proj_dir, text=True).strip(),
+                "markdownlint **/*.md"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.jsonlint"], cwd=proj_dir, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.jsonlintcmd"], cwd=proj_dir, text=True).strip(),
+                "python -m json.tool"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.yamllint"], cwd=proj_dir, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.lintgate"], cwd=proj_dir, text=True).strip(),
+                "true"
+            )
+            self.assertEqual(
+                subprocess.check_output(["git", "config", "--get", "hooks.lintcmd"], cwd=proj_dir, text=True).strip(),
+                "uv run ruff check"
             )
 
     def test_create_template_from_project(self):

@@ -1,8 +1,13 @@
 # Changelog
 
+## SemVer v3.1.3
+
+- 2026-11-02 (488cd05): feat: update current fine granular hook configurations to include optional markdownlinter and json linter, which are always selected by default, add additional yaml linter and regular code linter (like ruff and clippy), add corresponding ui elements to support the new options, add new test suites, bump semver
+
 ## SemVer v3.0.3
 
-- 2026-11-01 (c9347d0): fix: fix unclear ui input fields and add personalized fallback
+- 2026-11-02 (91c9789): fix: update spec file to generate a stand alone exe instead of a folder, update spec file to complete processing without having to confirm that old files can get deleted
+- 2026-11-01 (b3313c6): fix: fix unclear ui input fields and add personalized fallback
 
 ## SemVer v3.0.2
 

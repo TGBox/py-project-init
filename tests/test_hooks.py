@@ -808,6 +808,7 @@ class TestGitHooks(unittest.TestCase):
             res_ok = subprocess.run(
                 [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
                 input=push_input,
+                check=False,
                 cwd=proj,
                 capture_output=True,
                 text=True,
@@ -855,6 +856,7 @@ class TestGitHooks(unittest.TestCase):
             res_ok = subprocess.run(
                 [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
                 input=push_input,
+                check=False,
                 cwd=proj,
                 capture_output=True,
                 text=True,
@@ -997,6 +999,173 @@ class TestGitHooks(unittest.TestCase):
             changelog2 = (proj / "CHANGELOG.md").read_text(encoding="utf-8")
             self.assertIn("<https://api.example.com/v1>,", changelog2)
             self.assertIn("<https://github.com/org/repo/issues/42>", changelog2)
+
+
+    def test_pre_push_markdown_linter(self):
+        """Verifies pre-push hook validates markdown files and blocks push on syntax errors."""
+        hook_path = self.hooks_dir / "pre-push"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+
+            # Valid markdown
+            (proj / "README.md").write_text("# Project Title\n\nValid description.\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "chore: initial commit"], cwd=proj, check=True)
+            sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+
+            subprocess.run(["git", "checkout", "-b", "feature/docs"], cwd=proj, check=True)
+            push_input = f"refs/heads/feature/docs {sha} refs/heads/feature/docs 0000000000000000000000000000000000000000\n"
+
+            # 1. Valid markdown passes
+            res_ok = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input,
+                check=False,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(res_ok.returncode, 0, f"Valid markdown failed: {res_ok.stderr}")
+            self.assertIn("Markdown-Linting aktiv", res_ok.stdout)
+
+            # 2. Malformed markdown with unclosed code fence fails
+            (proj / "DOCS.md").write_text("# Docs\n\n```python\nprint('unclosed')\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "docs: broken fence"], cwd=proj, check=True)
+            bad_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+            push_bad = f"refs/heads/feature/docs {bad_sha} refs/heads/feature/docs {sha}\n"
+
+            res_bad = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_bad,
+                check=False,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertNotEqual(res_bad.returncode, 0, "Push with broken markdown should fail")
+            self.assertIn("Ungeschlossener Code-Block", res_bad.stderr + res_bad.stdout)
+
+            # 3. Disabling markdown linter allows push
+            subprocess.run(["git", "config", "hooks.markdownlint", "false"], cwd=proj, check=True)
+            res_disabled = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_bad,
+                check=False,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(res_disabled.returncode, 0, f"Push should succeed when hooks.markdownlint is false: {res_disabled.stderr}")
+
+    def test_pre_push_json_linter(self):
+        """Verifies pre-push hook validates JSON files and blocks push on syntax errors."""
+        hook_path = self.hooks_dir / "pre-push"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+
+            # Valid JSON
+            (proj / "config.json").write_text('{"name": "test", "version": 1}\n', encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "chore: add json config"], cwd=proj, check=True)
+            sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+
+            subprocess.run(["git", "checkout", "-b", "feature/json-test"], cwd=proj, check=True)
+            push_input = f"refs/heads/feature/json-test {sha} refs/heads/feature/json-test 0000000000000000000000000000000000000000\n"
+
+            # 1. Valid JSON passes
+            res_ok = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input,
+                check=False,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(res_ok.returncode, 0, f"Valid JSON push failed: {res_ok.stderr}")
+            self.assertIn("JSON-Linting aktiv", res_ok.stdout)
+
+            # 2. Corrupted JSON fails
+            (proj / "data.json").write_text('{"bad_json": [1, 2, }', encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "feat: broken json"], cwd=proj, check=True)
+            bad_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+            push_bad = f"refs/heads/feature/json-test {bad_sha} refs/heads/feature/json-test {sha}\n"
+
+            res_bad = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_bad,
+                check=False,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertNotEqual(res_bad.returncode, 0, "Corrupted JSON push should fail")
+            self.assertIn("FEHLER in data.json", res_bad.stderr + res_bad.stdout)
+
+            # 3. Disabling json linter allows push
+            subprocess.run(["git", "config", "hooks.jsonlint", "false"], cwd=proj, check=True)
+            res_disabled = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_bad,
+                check=False,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(res_disabled.returncode, 0, f"Push should succeed when hooks.jsonlint is false: {res_disabled.stderr}")
+
+    def test_pre_push_optional_yamllint_and_lintgate(self):
+        """Verifies optional YAML-linter and Code-Linter Gate in pre-push hook."""
+        hook_path = self.hooks_dir / "pre-push"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proj = Path(temp_dir)
+            subprocess.run(["git", "init", "-b", "main"], cwd=proj, check=True, capture_output=True)
+            subprocess.run(["git", "config", "user.name", "Tester"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.yamllint", "true"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.lintgate", "true"], cwd=proj, check=True)
+            subprocess.run(["git", "config", "hooks.lintcmd", "echo 'LINT PASSED'"], cwd=proj, check=True)
+
+            (proj / "valid.yaml").write_text("key: value\nlist:\n  - a\n  - b\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=proj, check=True)
+            subprocess.run(["git", "commit", "-m", "chore: add yaml"], cwd=proj, check=True)
+            sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=proj, text=True).strip()
+
+            subprocess.run(["git", "checkout", "-b", "feature/yaml"], cwd=proj, check=True)
+            push_input = f"refs/heads/feature/yaml {sha} refs/heads/feature/yaml 0000000000000000000000000000000000000000\n"
+
+            res_ok = subprocess.run(
+                [self.bash, str(hook_path), "origin", "https://example.com/repo.git"],
+                input=push_input,
+                check=False,
+                cwd=proj,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+            self.assertEqual(res_ok.returncode, 0, f"Valid YAML and lint gate should pass: {res_ok.stderr}")
+            self.assertIn("YAML-Linting aktiv", res_ok.stdout)
+            self.assertIn("Code-Linter-Gate aktiv", res_ok.stdout)
 
 
 if __name__ == "__main__":
