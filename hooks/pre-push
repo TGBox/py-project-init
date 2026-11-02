@@ -25,16 +25,391 @@ while read -r LOCAL_REF LOCAL_SHA REMOTE_REF REMOTE_SHA; do
     PUSH_LINES+=("$LOCAL_REF $LOCAL_SHA $REMOTE_REF $REMOTE_SHA")
 done
 
-if [ "$GIT_PRE_PUSH_SKIP_TESTS" = "1" ]; then
-    exit 0
+# Ermittle zentral verfügbare Python-Binary für Hilfsskripte
+PYTHON_BIN="python3"
+if command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
+    PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1 && python -c "import sys" >/dev/null 2>&1; then
+    PYTHON_BIN="python"
+elif command -v py >/dev/null 2>&1 && py -c "import sys" >/dev/null 2>&1; then
+    PYTHON_BIN="py"
 fi
 
 # -----------------------------------------------------------------------------
-# Smarte Testausführung (hooks.smarttests):
+# Ermittlung der veränderten Dateien im Push-Bereich
+# -----------------------------------------------------------------------------
+CHANGED_FILES=""
+ALL_DELETIONS=1
+
+if [ ${#PUSH_LINES[@]} -gt 0 ]; then
+    for line in "${PUSH_LINES[@]}"; do
+        read -r L_REF L_SHA R_REF R_SHA <<< "$line"
+        L_REF="${L_REF%$'\r'}"
+        L_SHA="${L_SHA%$'\r'}"
+        R_REF="${R_REF%$'\r'}"
+        R_SHA="${R_SHA%$'\r'}"
+        if [ -z "$L_SHA" ] || [ "$L_SHA" = "0000000000000000000000000000000000000000" ] || [ "$L_SHA" = "000000" ]; then
+            continue
+        fi
+        ALL_DELETIONS=0
+
+        if [ "$R_SHA" = "0000000000000000000000000000000000000000" ] || [ "$R_SHA" = "000000" ]; then
+            # Neuer Branch: Ermittle gemeinsamen Vorfahren mit remote default branch oder lokalem main
+            BASE_REF=$(git merge-base "$L_SHA" "$REMOTE/main" 2>/dev/null || git merge-base "$L_SHA" origin/main 2>/dev/null || git merge-base "$L_SHA" main 2>/dev/null || git merge-base "$L_SHA" master 2>/dev/null || true)
+            if [ -n "$BASE_REF" ]; then
+                DIFF_FILES=$(git diff --name-only "$BASE_REF" "$L_SHA" 2>/dev/null || true)
+            else
+                DIFF_FILES=$(git diff-tree --no-commit-id --name-only -r "$L_SHA" 2>/dev/null || true)
+            fi
+        else
+            DIFF_FILES=$(git diff --name-only "$R_SHA" "$L_SHA" 2>/dev/null || true)
+        fi
+        CHANGED_FILES=$(printf "%s\n%s" "$CHANGED_FILES" "$DIFF_FILES")
+    done
+
+    if [ "$ALL_DELETIONS" = "1" ]; then
+        # Nur Branch-Löschungen, keine Prüfungen notwendig
+        exit 0
+    fi
+else
+    # Fallback (z.B. manuelle Hook-Ausführung ohne Stdin)
+    UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
+    if [ -n "$UPSTREAM" ]; then
+        CHANGED_FILES=$(git diff --name-only "$UPSTREAM..HEAD" 2>/dev/null || true)
+    else
+        BASE_REF=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null || true)
+        if [ -n "$BASE_REF" ]; then
+            CHANGED_FILES=$(git diff --name-only "$BASE_REF..HEAD" 2>/dev/null || true)
+        else
+            CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null || true)
+        fi
+    fi
+fi
+
+# Bereinigen und Duplikate entfernen
+CLEAN_CHANGED=$(echo "$CHANGED_FILES" | sed '/^[[:space:]]*$/d' | sort -u)
+
+# -----------------------------------------------------------------------------
+# 1. Markdown-Linter (hooks.markdownlint - Standard: true)
+# Validiert automatisch alle geänderten oder vorhandenen Markdown-Dateien (*.md).
+# -----------------------------------------------------------------------------
+HOOK_MARKDOWN_LINT=$(git config --bool hooks.markdownlint 2>/dev/null || echo "true")
+if [ "$GIT_PRE_PUSH_SKIP_LINTERS" = "1" ] || [ "$GIT_PRE_PUSH_SKIP_MARKDOWN_LINT" = "1" ]; then
+    HOOK_MARKDOWN_LINT="false"
+fi
+
+if [ "$HOOK_MARKDOWN_LINT" = "true" ]; then
+    MD_FILES=""
+    if [ -n "$CLEAN_CHANGED" ]; then
+        MD_FILES=$(echo "$CLEAN_CHANGED" | grep -Ei '\.md$' || true)
+    else
+        MD_FILES=$(git ls-files '*.md' 2>/dev/null || true)
+    fi
+
+    if [ -n "$MD_FILES" ]; then
+        MD_CMD=$(git config hooks.markdownlintcmd 2>/dev/null || echo "")
+        echo "----------------------------------------------------------------"
+        echo "Markdown-Linting aktiv (hooks.markdownlint):"
+        if [ -n "$MD_CMD" ]; then
+            echo "Führe benutzerdefinierten Markdown-Linter aus ($MD_CMD)..."
+            set +e
+            ( eval "$MD_CMD" )
+            MD_EXIT=$?
+            set -e
+            if [ $MD_EXIT -ne 0 ]; then
+                echo "FEHLER: Markdown-Linter ($MD_CMD) fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            fi
+            echo "✔ Benutzerdefinierter Markdown-Linter erfolgreich abgeschlossen."
+        elif command -v markdownlint-cli2 >/dev/null 2>&1; then
+            echo "Führe markdownlint-cli2 aus..."
+            # shellcheck disable=SC2086
+            markdownlint-cli2 $MD_FILES || {
+                echo "FEHLER: markdownlint-cli2 fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            }
+            echo "✔ Markdown-Linting erfolgreich abgeschlossen."
+        elif command -v markdownlint >/dev/null 2>&1; then
+            echo "Führe markdownlint aus..."
+            # shellcheck disable=SC2086
+            markdownlint $MD_FILES || {
+                echo "FEHLER: markdownlint fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            }
+            echo "✔ Markdown-Linting erfolgreich abgeschlossen."
+        elif command -v pymarkdown >/dev/null 2>&1; then
+            echo "Führe pymarkdown scan aus..."
+            # shellcheck disable=SC2086
+            pymarkdown scan $MD_FILES || {
+                echo "FEHLER: pymarkdown fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            }
+            echo "✔ Markdown-Linting erfolgreich abgeschlossen."
+        else
+            echo "Prüfe Markdown-Dateien auf Formatierung und Syntax..."
+            MD_ERRORS=0
+            for mf in $MD_FILES; do
+                if [ -f "$mf" ]; then
+                    if [ -n "$PYTHON_BIN" ]; then
+                        set +e
+                        MD_OUT=$("$PYTHON_BIN" - "$mf" << 'PYEOF' 2>&1
+import sys, re
+path = sys.argv[1]
+errors = []
+try:
+    with open(path, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+    in_code_block = False
+    fence_char = ''
+    for idx, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith('```') or stripped.startswith('~~~'):
+            curr_fence = stripped[:3]
+            if not in_code_block:
+                in_code_block = True
+                fence_char = curr_fence
+            elif curr_fence == fence_char:
+                in_code_block = False
+        elif not in_code_block:
+            # Check for malformed headers like '#Header' without space
+            if re.match(r'^#{1,6}[^#\s]', stripped):
+                errors.append(f"Zeile {idx}: Überschrift ohne Leerzeichen nach '#' ('{stripped[:20]}...').")
+            # Check for broken empty links like [text]() or [text](<>)
+            if re.search(r'\[([^\]]+)\]\(\s*\)', stripped) or re.search(r'\[([^\]]+)\]\(\s*<>\s*\)', stripped):
+                errors.append(f"Zeile {idx}: Leeres Link-Ziel '[text]()'.")
+    if in_code_block:
+        errors.append("Ungeschlossener Code-Block (fehlender abschließender Code-Fence ```).")
+except UnicodeDecodeError:
+    errors.append("Datei ist kein gültiges UTF-8.")
+except Exception as e:
+    errors.append(f"Lesefehler: {e}")
+
+if errors:
+    print(f"FEHLER in {path}:", file=sys.stderr)
+    for err in errors:
+        print(f"  - {err}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+)
+                        MD_STATUS=$?
+                        set -e
+                        if [ $MD_STATUS -ne 0 ]; then
+                            echo "$MD_OUT" >&2
+                            MD_ERRORS=$((MD_ERRORS + 1))
+                        fi
+                    fi
+                fi
+            done
+            if [ $MD_ERRORS -ne 0 ]; then
+                echo "FEHLER: $MD_ERRORS fehlerhafte Markdown-Datei(en) gefunden. Push abgebrochen." >&2
+                exit 1
+            fi
+            echo "✔ Markdown-Linting erfolgreich abgeschlossen (alle Markdown-Dateien valide)."
+        fi
+        echo "----------------------------------------------------------------"
+    fi
+fi
+
+# -----------------------------------------------------------------------------
+# 2. JSON-Linter (hooks.jsonlint - Standard: true)
+# Validiert automatisch alle geänderten oder vorhandenen JSON-Dateien (*.json).
+# -----------------------------------------------------------------------------
+HOOK_JSON_LINT=$(git config --bool hooks.jsonlint 2>/dev/null || echo "true")
+if [ "$GIT_PRE_PUSH_SKIP_LINTERS" = "1" ] || [ "$GIT_PRE_PUSH_SKIP_JSON_LINT" = "1" ]; then
+    HOOK_JSON_LINT="false"
+fi
+
+if [ "$HOOK_JSON_LINT" = "true" ]; then
+    JSON_FILES=""
+    if [ -n "$CLEAN_CHANGED" ]; then
+        JSON_FILES=$(echo "$CLEAN_CHANGED" | grep -Ei '\.json$' || true)
+    else
+        JSON_FILES=$(git ls-files '*.json' 2>/dev/null || true)
+    fi
+
+    if [ -n "$JSON_FILES" ]; then
+        JSON_CMD=$(git config hooks.jsonlintcmd 2>/dev/null || echo "")
+        echo "----------------------------------------------------------------"
+        echo "JSON-Linting aktiv (hooks.jsonlint):"
+        if [ -n "$JSON_CMD" ]; then
+            echo "Führe benutzerdefinierten JSON-Linter aus ($JSON_CMD)..."
+            set +e
+            ( eval "$JSON_CMD" )
+            JSON_EXIT=$?
+            set -e
+            if [ $JSON_EXIT -ne 0 ]; then
+                echo "FEHLER: JSON-Linter ($JSON_CMD) fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            fi
+            echo "✔ Benutzerdefinierter JSON-Linter erfolgreich abgeschlossen."
+        else
+            echo "Prüfe JSON-Dateien auf syntaktische Gültigkeit..."
+            JSON_ERRORS=0
+            for jf in $JSON_FILES; do
+                if [ -f "$jf" ]; then
+                    if [ -n "$PYTHON_BIN" ]; then
+                        set +e
+                        JSON_OUT=$("$PYTHON_BIN" - "$jf" << 'PYEOF' 2>&1
+import sys, json
+path = sys.argv[1]
+try:
+    with open(path, 'r', encoding='utf-8') as f:
+        json.load(f)
+except json.JSONDecodeError as e:
+    print(f"FEHLER in {path} (Zeile {e.lineno}, Spalte {e.colno}): {e.msg}", file=sys.stderr)
+    sys.exit(1)
+except UnicodeDecodeError:
+    print(f"FEHLER in {path}: Datei ist kein gültiges UTF-8.", file=sys.stderr)
+    sys.exit(1)
+except Exception as e:
+    print(f"FEHLER in {path}: {e}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+)
+                        JSON_STATUS=$?
+                        set -e
+                        if [ $JSON_STATUS -ne 0 ]; then
+                            echo "$JSON_OUT" >&2
+                            JSON_ERRORS=$((JSON_ERRORS + 1))
+                        fi
+                    elif command -v jq >/dev/null 2>&1; then
+                        if ! jq . "$jf" >/dev/null 2>&1; then
+                            echo "FEHLER in $jf: Ungültige JSON-Syntax." >&2
+                            JSON_ERRORS=$((JSON_ERRORS + 1))
+                        fi
+                    fi
+                fi
+            done
+            if [ $JSON_ERRORS -ne 0 ]; then
+                echo "FEHLER: $JSON_ERRORS fehlerhafte JSON-Datei(en) gefunden. Push abgebrochen." >&2
+                exit 1
+            fi
+            echo "✔ JSON-Linting erfolgreich abgeschlossen (alle JSON-Dateien valide)."
+        fi
+        echo "----------------------------------------------------------------"
+    fi
+fi
+
+# -----------------------------------------------------------------------------
+# 3. Optionale Option: YAML-Linter (hooks.yamllint - Standard: false)
+# Validiert alle geänderten oder vorhandenen YAML-Dateien (*.yaml, *.yml).
+# -----------------------------------------------------------------------------
+HOOK_YAML_LINT=$(git config --bool hooks.yamllint 2>/dev/null || echo "false")
+if [ "$HOOK_YAML_LINT" = "true" ] && [ "$GIT_PRE_PUSH_SKIP_LINTERS" != "1" ]; then
+    YAML_FILES=""
+    if [ -n "$CLEAN_CHANGED" ]; then
+        YAML_FILES=$(echo "$CLEAN_CHANGED" | grep -Ei '\.(ya?ml)$' || true)
+    else
+        YAML_FILES=$(git ls-files '*.yaml' '*.yml' 2>/dev/null || true)
+    fi
+
+    if [ -n "$YAML_FILES" ]; then
+        YAML_CMD=$(git config hooks.yamllintcmd 2>/dev/null || echo "")
+        echo "----------------------------------------------------------------"
+        echo "YAML-Linting aktiv (hooks.yamllint):"
+        if [ -n "$YAML_CMD" ]; then
+            echo "Führe benutzerdefinierten YAML-Linter aus ($YAML_CMD)..."
+            set +e
+            ( eval "$YAML_CMD" )
+            YAML_EXIT=$?
+            set -e
+            if [ $YAML_EXIT -ne 0 ]; then
+                echo "FEHLER: YAML-Linter ($YAML_CMD) fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            fi
+            echo "✔ Benutzerdefinierter YAML-Linter erfolgreich abgeschlossen."
+        elif command -v yamllint >/dev/null 2>&1; then
+            echo "Führe yamllint aus..."
+            # shellcheck disable=SC2086
+            yamllint $YAML_FILES || {
+                echo "FEHLER: yamllint fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            }
+            echo "✔ YAML-Linting erfolgreich abgeschlossen."
+        elif [ -n "$PYTHON_BIN" ]; then
+            echo "Prüfe YAML-Dateien auf syntaktische Gültigkeit..."
+            YAML_ERRORS=0
+            for yf in $YAML_FILES; do
+                if [ -f "$yf" ]; then
+                    set +e
+                    YAML_OUT=$("$PYTHON_BIN" - "$yf" << 'PYEOF' 2>&1
+import sys
+path = sys.argv[1]
+try:
+    import yaml
+    with open(path, 'r', encoding='utf-8') as f:
+        yaml.safe_load(f)
+except ImportError:
+    pass
+except Exception as e:
+    print(f"FEHLER in {path}: {e}", file=sys.stderr)
+    sys.exit(1)
+PYEOF
+)
+                    YAML_STATUS=$?
+                    set -e
+                    if [ $YAML_STATUS -ne 0 ]; then
+                        echo "$YAML_OUT" >&2
+                        YAML_ERRORS=$((YAML_ERRORS + 1))
+                    fi
+                fi
+            done
+            if [ $YAML_ERRORS -ne 0 ]; then
+                echo "FEHLER: $YAML_ERRORS fehlerhafte YAML-Datei(en) gefunden. Push abgebrochen." >&2
+                exit 1
+            fi
+            echo "✔ YAML-Linting erfolgreich abgeschlossen (alle YAML-Dateien valide)."
+        fi
+        echo "----------------------------------------------------------------"
+    fi
+fi
+
+# -----------------------------------------------------------------------------
+# 4. Optionale Option: Code-Linter Gate (hooks.lintgate - Standard: false)
+# Führt einen Code-Linter vor dem Push aus (z.B. ruff, eslint, clippy).
+# -----------------------------------------------------------------------------
+HOOK_LINT_GATE=$(git config --bool hooks.lintgate 2>/dev/null || echo "false")
+if [ "$HOOK_LINT_GATE" = "true" ] && [ "$GIT_PRE_PUSH_SKIP_LINTERS" != "1" ]; then
+    LINT_CMD=$(git config hooks.lintcmd 2>/dev/null || echo "")
+    if [ -z "$LINT_CMD" ]; then
+        if [ -f "pyproject.toml" ] && command -v uv >/dev/null 2>&1; then
+            if uv run ruff --version >/dev/null 2>&1; then
+                LINT_CMD="uv run ruff check"
+            fi
+        elif [ -f "package.json" ] && command -v npm >/dev/null 2>&1 && npm run 2>/dev/null | grep -q "lint"; then
+            LINT_CMD="npm run lint"
+        elif [ -f "Cargo.toml" ] && command -v cargo >/dev/null 2>&1; then
+            LINT_CMD="cargo clippy -- -D warnings"
+        fi
+    fi
+
+    if [ -n "$LINT_CMD" ]; then
+        echo "----------------------------------------------------------------"
+        echo "Code-Linter-Gate aktiv (hooks.lintgate): Führe Linter aus ($LINT_CMD)..."
+        set +e
+        ( eval "$LINT_CMD" )
+        LINT_EXIT=$?
+        set -e
+        if [ $LINT_EXIT -ne 0 ]; then
+            echo "FEHLER: Code-Linter vor dem Push fehlgeschlagen ($LINT_CMD). Push abgebrochen." >&2
+            exit 1
+        fi
+        echo "✔ Code-Linter erfolgreich abgeschlossen."
+        echo "----------------------------------------------------------------"
+    fi
+fi
+
+# -----------------------------------------------------------------------------
+# 5. Smarte Testausführung (hooks.smarttests) & Test-Gate
 # Wenn aktiviert, wird geprüft, ob seit dem letzten Push Codedateien geändert wurden.
 # Wurden nur Konfigurations-, Doku- oder Asset-Dateien geändert, wird das Test-Gate übersprungen.
 # Wurde mindestens eine Codedatei verändert, werden alle Tests ausgeführt.
 # -----------------------------------------------------------------------------
+SKIP_TESTS=0
+if [ "$GIT_PRE_PUSH_SKIP_TESTS" = "1" ]; then
+    SKIP_TESTS=1
+fi
+
 SMART_TESTS=$(git config --bool hooks.smarttests 2>/dev/null || echo "false")
 if [ "$GIT_PRE_PUSH_SMART_TESTS" = "1" ] || [ "$GIT_PRE_PUSH_SMART_TESTS" = "true" ]; then
     SMART_TESTS="true"
@@ -42,58 +417,7 @@ elif [ "$GIT_PRE_PUSH_SMART_TESTS" = "0" ] || [ "$GIT_PRE_PUSH_SMART_TESTS" = "f
     SMART_TESTS="false"
 fi
 
-if [ "$SMART_TESTS" = "true" ]; then
-    CHANGED_FILES=""
-    ALL_DELETIONS=1
-
-    if [ ${#PUSH_LINES[@]} -gt 0 ]; then
-        for line in "${PUSH_LINES[@]}"; do
-            read -r L_REF L_SHA R_REF R_SHA <<< "$line"
-            L_REF="${L_REF%$'\r'}"
-            L_SHA="${L_SHA%$'\r'}"
-            R_REF="${R_REF%$'\r'}"
-            R_SHA="${R_SHA%$'\r'}"
-            if [ -z "$L_SHA" ] || [ "$L_SHA" = "0000000000000000000000000000000000000000" ] || [ "$L_SHA" = "000000" ]; then
-                continue
-            fi
-            ALL_DELETIONS=0
-
-            if [ "$R_SHA" = "0000000000000000000000000000000000000000" ] || [ "$R_SHA" = "000000" ]; then
-                # Neuer Branch: Ermittle gemeinsamen Vorfahren mit remote default branch oder lokalem main
-                BASE_REF=$(git merge-base "$L_SHA" "$REMOTE/main" 2>/dev/null || git merge-base "$L_SHA" origin/main 2>/dev/null || git merge-base "$L_SHA" main 2>/dev/null || git merge-base "$L_SHA" master 2>/dev/null || true)
-                if [ -n "$BASE_REF" ]; then
-                    DIFF_FILES=$(git diff --name-only "$BASE_REF" "$L_SHA" 2>/dev/null || true)
-                else
-                    DIFF_FILES=$(git diff-tree --no-commit-id --name-only -r "$L_SHA" 2>/dev/null || true)
-                fi
-            else
-                DIFF_FILES=$(git diff --name-only "$R_SHA" "$L_SHA" 2>/dev/null || true)
-            fi
-            CHANGED_FILES=$(printf "%s\n%s" "$CHANGED_FILES" "$DIFF_FILES")
-        done
-
-        if [ "$ALL_DELETIONS" = "1" ]; then
-            # Nur Branch-Löschungen, keine Tests notwendig
-            exit 0
-        fi
-    else
-        # Fallback (z.B. manuelle Hook-Ausführung ohne Stdin)
-        UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)
-        if [ -n "$UPSTREAM" ]; then
-            CHANGED_FILES=$(git diff --name-only "$UPSTREAM..HEAD" 2>/dev/null || true)
-        else
-            BASE_REF=$(git merge-base HEAD origin/main 2>/dev/null || git merge-base HEAD main 2>/dev/null || true)
-            if [ -n "$BASE_REF" ]; then
-                CHANGED_FILES=$(git diff --name-only "$BASE_REF..HEAD" 2>/dev/null || true)
-            else
-                CHANGED_FILES=$(git diff-tree --no-commit-id --name-only -r HEAD 2>/dev/null || true)
-            fi
-        fi
-    fi
-
-    # Bereinigen und Duplikate entfernen
-    CLEAN_CHANGED=$(echo "$CHANGED_FILES" | sed '/^[[:space:]]*$/d' | sort -u)
-
+if [ "$SKIP_TESTS" = "0" ] && [ "$SMART_TESTS" = "true" ]; then
     # Prüfe auf gängige Quellcode-Dateiendungen
     CODE_CHANGES=$(echo "$CLEAN_CHANGED" | grep -Ei '\.(py|rs|ts|tsx|js|jsx|mjs|cjs|vue|svelte|cs|shader|asmdef|go|c|cpp|cc|cxx|h|hpp|sh|bash|ps1)$' || true)
 
@@ -103,7 +427,7 @@ if [ "$SMART_TESTS" = "true" ]; then
         echo "Keine Codedateien verändert (nur Konfiguration/Dokumentation)."
         echo "Test-Gate wird übersprungen."
         echo "----------------------------------------------------------------"
-        exit 0
+        SKIP_TESTS=1
     else
         echo "Smarte Testausführung aktiv: Codedateien wurden verändert -> Führe vollständige Testsuite aus."
     fi
@@ -112,78 +436,72 @@ fi
 # -----------------------------------------------------------------------------
 # Test-Ausführung (Benutzerdefiniert via hooks.testcmd oder Auto-Erkennung):
 # -----------------------------------------------------------------------------
-TEST_CMD=$(git config hooks.testcmd 2>/dev/null || echo "")
+if [ "$SKIP_TESTS" = "0" ]; then
+    TEST_CMD=$(git config hooks.testcmd 2>/dev/null || echo "")
 
-if [ -n "$TEST_CMD" ]; then
-    echo "Führe benutzerdefinierten Test-Befehl vor dem Push aus ($TEST_CMD)..."
-    set +e
-    ( eval "$TEST_CMD" )
-    TEST_EXIT=$?
-    set -e
-    if [ $TEST_EXIT -ne 0 ]; then
-        echo "FEHLER: Test-Befehl ($TEST_CMD) vor dem Push fehlgeschlagen. Push abgebrochen." >&2
-        exit 1
-    fi
-elif [ -f "pyproject.toml" ] && command -v uv >/dev/null 2>&1 && [ -d "tests" ]; then
-    if uv run pytest --version >/dev/null 2>&1; then
-        echo "Führe pytest vor dem Push aus..."
-        uv run pytest -q || {
-            echo "FEHLER: pytest vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+    if [ -n "$TEST_CMD" ]; then
+        echo "Führe benutzerdefinierten Test-Befehl vor dem Push aus ($TEST_CMD)..."
+        set +e
+        ( eval "$TEST_CMD" )
+        TEST_EXIT=$?
+        set -e
+        if [ $TEST_EXIT -ne 0 ]; then
+            echo "FEHLER: Test-Befehl ($TEST_CMD) vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+            exit 1
+        fi
+    elif [ -f "pyproject.toml" ] && command -v uv >/dev/null 2>&1 && [ -d "tests" ]; then
+        if uv run pytest --version >/dev/null 2>&1; then
+            echo "Führe pytest vor dem Push aus..."
+            uv run pytest -q || {
+                echo "FEHLER: pytest vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            }
+        fi
+    elif [ -f "Cargo.toml" ] && command -v cargo >/dev/null 2>&1; then
+        echo "Führe cargo test vor dem Push aus..."
+        cargo test -q || {
+            echo "FEHLER: cargo test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+            exit 1
+        }
+    elif [ -f "package.json" ]; then
+        if command -v npm >/dev/null 2>&1 && npm run 2>/dev/null | grep -q "test"; then
+            echo "Führe npm test vor dem Push aus..."
+            npm test || {
+                echo "FEHLER: npm test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            }
+        elif command -v npx >/dev/null 2>&1 && [ -f "node_modules/.bin/vitest" ]; then
+            echo "Führe vitest vor dem Push aus..."
+            npx vitest run || {
+                echo "FEHLER: vitest vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            }
+        fi
+    elif [ -f "ProjectSettings/ProjectVersion.txt" ]; then
+        if command -v Unity >/dev/null 2>&1; then
+            echo "Führe Unity Test Runner vor dem Push aus..."
+            Unity -batchmode -runTests -projectPath . -testPlatform PlayMode -testResults tests/results.xml || {
+                echo "FEHLER: Unity Tests vor dem Push fehlgeschlagen. Push abgebrochen." >&2
+                exit 1
+            }
+        fi
+    elif ([ -f "*.sln" ] || compgen -G "*.sln" >/dev/null 2>&1 || compgen -G "*/*.csproj" >/dev/null 2>&1) && command -v dotnet >/dev/null 2>&1; then
+        echo "Führe dotnet test vor dem Push aus..."
+        dotnet test -q || {
+            echo "FEHLER: dotnet test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
             exit 1
         }
     fi
-elif [ -f "Cargo.toml" ] && command -v cargo >/dev/null 2>&1; then
-    echo "Führe cargo test vor dem Push aus..."
-    cargo test -q || {
-        echo "FEHLER: cargo test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
-        exit 1
-    }
-elif [ -f "package.json" ]; then
-    if command -v npm >/dev/null 2>&1 && npm run 2>/dev/null | grep -q "test"; then
-        echo "Führe npm test vor dem Push aus..."
-        npm test || {
-            echo "FEHLER: npm test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
-            exit 1
-        }
-    elif command -v npx >/dev/null 2>&1 && [ -f "node_modules/.bin/vitest" ]; then
-        echo "Führe vitest vor dem Push aus..."
-        npx vitest run || {
-            echo "FEHLER: vitest vor dem Push fehlgeschlagen. Push abgebrochen." >&2
-            exit 1
-        }
-    fi
-elif [ -f "ProjectSettings/ProjectVersion.txt" ]; then
-    if command -v Unity >/dev/null 2>&1; then
-        echo "Führe Unity Test Runner vor dem Push aus..."
-        Unity -batchmode -runTests -projectPath . -testPlatform PlayMode -testResults tests/results.xml || {
-            echo "FEHLER: Unity Tests vor dem Push fehlgeschlagen. Push abgebrochen." >&2
-            exit 1
-        }
-    fi
-elif ([ -f "*.sln" ] || compgen -G "*.sln" >/dev/null 2>&1 || compgen -G "*/*.csproj" >/dev/null 2>&1) && command -v dotnet >/dev/null 2>&1; then
-    echo "Führe dotnet test vor dem Push aus..."
-    dotnet test -q || {
-        echo "FEHLER: dotnet test vor dem Push fehlgeschlagen. Push abgebrochen." >&2
-        exit 1
-    }
 fi
 
 # -----------------------------------------------------------------------------
-# Tag-Erneuerung beim Push (hooks.renewtagonpush)
+# 6. Tag-Erneuerung beim Push (hooks.renewtagonpush)
 # -----------------------------------------------------------------------------
 RENEW_TAG=$(git config --bool hooks.renewtagonpush 2>/dev/null || echo "false")
 if [ "$RENEW_TAG" = "true" ]; then
     CURRENT_VERSION=""
-    PYTHON_BIN="python3"
-    if command -v python3 >/dev/null 2>&1 && python3 -c "import sys" >/dev/null 2>&1; then
-        PYTHON_BIN="python3"
-    elif command -v python >/dev/null 2>&1 && python -c "import sys" >/dev/null 2>&1; then
-        PYTHON_BIN="python"
-    elif command -v py >/dev/null 2>&1 && py -c "import sys" >/dev/null 2>&1; then
-        PYTHON_BIN="py"
-    fi
 
-    if [ -f "pyproject.toml" ]; then
+    if [ -f "pyproject.toml" ] && [ -n "$PYTHON_BIN" ]; then
         CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
 import re
 try:
@@ -195,7 +513,7 @@ except Exception:
     pass
 EOF
 )
-    elif [ -f "package.json" ]; then
+    elif [ -f "package.json" ] && [ -n "$PYTHON_BIN" ]; then
         CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
 import json
 try:
@@ -205,7 +523,7 @@ except Exception:
     pass
 EOF
 )
-    elif [ -f "Cargo.toml" ]; then
+    elif [ -f "Cargo.toml" ] && [ -n "$PYTHON_BIN" ]; then
         CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
 import re
 try:
@@ -220,7 +538,7 @@ except Exception:
     pass
 EOF
 )
-    elif [ -f "ProjectSettings/ProjectSettings.asset" ]; then
+    elif [ -f "ProjectSettings/ProjectSettings.asset" ] && [ -n "$PYTHON_BIN" ]; then
         CURRENT_VERSION=$("$PYTHON_BIN" - << 'EOF'
 import re
 try:
@@ -271,7 +589,7 @@ EOF
 fi
 
 # -----------------------------------------------------------------------------
-# Automatischer Exe-Build vor dem Push (hooks.buildexe)
+# 7. Automatischer Exe-Build vor dem Push (hooks.buildexe)
 # -----------------------------------------------------------------------------
 BUILD_EXE=$(git config --bool hooks.buildexe 2>/dev/null || echo "false")
 if [ "$BUILD_EXE" = "true" ]; then
@@ -321,7 +639,7 @@ if [ "$BUILD_EXE" = "true" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# Artefakt-Deployment ins externe Repository (hooks.deployartifact)
+# 8. Artefakt-Deployment ins externe Repository (hooks.deployartifact)
 # -----------------------------------------------------------------------------
 DEPLOY_ARTIFACT=$(git config --bool hooks.deployartifact 2>/dev/null || echo "false")
 if [ "$DEPLOY_ARTIFACT" = "true" ]; then
@@ -403,4 +721,3 @@ if [ "$DEPLOY_ARTIFACT" = "true" ]; then
     rm -rf "$TMP_SYNC_DIR" 2>/dev/null || true
     echo "----------------------------------------------------------------"
 fi
-

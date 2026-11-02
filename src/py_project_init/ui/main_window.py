@@ -638,6 +638,50 @@ class MainWindow(QMainWindow):
         adv_hooks_layout.addWidget(self.git_external_repo_input)
         adv_hooks_layout.addLayout(ext_repo_row)
 
+        # Markdown-Linter (Standard: aktiv)
+        self.git_markdown_lint_cb = QCheckBox("Markdown-Linter vor Push ausführen (hooks.markdownlint)")
+        self.git_markdown_lint_cb.setChecked(True)
+        self.git_markdown_lint_cb.setToolTip("Validiert vor dem Push alle geänderten oder vorhandenen Markdown-Dateien (*.md) auf Syntax, UTF-8 und defekte Links.")
+        self.git_markdown_lint_cmd_input = QLineEdit()
+        self.git_markdown_lint_cmd_input.setPlaceholderText("Markdown-Linter-Befehl (leer lassen für Auto-Erkennung / Built-in)")
+        self.git_markdown_lint_cmd_input.setEnabled(True)
+        self.git_markdown_lint_cb.toggled.connect(self.git_markdown_lint_cmd_input.setEnabled)
+        adv_hooks_layout.addWidget(self.git_markdown_lint_cb)
+        adv_hooks_layout.addWidget(self.git_markdown_lint_cmd_input)
+
+        # JSON-Linter (Standard: aktiv)
+        self.git_json_lint_cb = QCheckBox("JSON-Linter vor Push ausführen (hooks.jsonlint)")
+        self.git_json_lint_cb.setChecked(True)
+        self.git_json_lint_cb.setToolTip("Validiert vor dem Push alle geänderten oder vorhandenen JSON-Dateien (*.json) auf syntaktische Gültigkeit.")
+        self.git_json_lint_cmd_input = QLineEdit()
+        self.git_json_lint_cmd_input.setPlaceholderText("JSON-Linter-Befehl (leer lassen für Python json.tool / jq)")
+        self.git_json_lint_cmd_input.setEnabled(True)
+        self.git_json_lint_cb.toggled.connect(self.git_json_lint_cmd_input.setEnabled)
+        adv_hooks_layout.addWidget(self.git_json_lint_cb)
+        adv_hooks_layout.addWidget(self.git_json_lint_cmd_input)
+
+        # YAML-Linter (Standard: inaktiv)
+        self.git_yaml_lint_cb = QCheckBox("YAML-Linter vor Push ausführen (hooks.yamllint)")
+        self.git_yaml_lint_cb.setChecked(False)
+        self.git_yaml_lint_cb.setToolTip("Validiert vor dem Push alle geänderten oder vorhandenen YAML-Dateien (*.yaml, *.yml) auf syntaktische Korrektheit.")
+        self.git_yaml_lint_cmd_input = QLineEdit()
+        self.git_yaml_lint_cmd_input.setPlaceholderText("YAML-Linter-Befehl (leer lassen für PyYAML / yamllint)")
+        self.git_yaml_lint_cmd_input.setEnabled(False)
+        self.git_yaml_lint_cb.toggled.connect(self.git_yaml_lint_cmd_input.setEnabled)
+        adv_hooks_layout.addWidget(self.git_yaml_lint_cb)
+        adv_hooks_layout.addWidget(self.git_yaml_lint_cmd_input)
+
+        # Code-Linter Gate (Standard: inaktiv)
+        self.git_lint_gate_cb = QCheckBox("Code-Linter Gate vor Push erzwingen (hooks.lintgate)")
+        self.git_lint_gate_cb.setChecked(False)
+        self.git_lint_gate_cb.setToolTip("Führt vor dem Push einen Code-Linter (z. B. ruff check, eslint, clippy) aus und bricht bei Fehlern ab.")
+        self.git_lint_cmd_input = QLineEdit()
+        self.git_lint_cmd_input.setPlaceholderText("z. B. uv run ruff check oder npm run lint (leer lassen für Auto-Erkennung)")
+        self.git_lint_cmd_input.setEnabled(False)
+        self.git_lint_gate_cb.toggled.connect(self.git_lint_cmd_input.setEnabled)
+        adv_hooks_layout.addWidget(self.git_lint_gate_cb)
+        adv_hooks_layout.addWidget(self.git_lint_cmd_input)
+
         hooks_box_layout.addWidget(self.git_advanced_hooks_group)
 
         self.git_hooks_enable_cb.toggled.connect(self.git_hooks_container.setEnabled)
@@ -650,6 +694,10 @@ class MainWindow(QMainWindow):
         self.git_renew_tag_cb.toggled.connect(lambda _: self._update_summary())
         self.git_build_exe_cb.toggled.connect(lambda _: self._update_summary())
         self.git_deploy_artifact_cb.toggled.connect(lambda _: self._update_summary())
+        self.git_markdown_lint_cb.toggled.connect(lambda _: self._update_summary())
+        self.git_json_lint_cb.toggled.connect(lambda _: self._update_summary())
+        self.git_yaml_lint_cb.toggled.connect(lambda _: self._update_summary())
+        self.git_lint_gate_cb.toggled.connect(lambda _: self._update_summary())
         tab2_layout.addWidget(self.git_hooks_box)
 
         # Agenten Box
@@ -944,7 +992,17 @@ class MainWindow(QMainWindow):
             smart_txt = " + Smart-Tests" if hasattr(self, "git_smart_tests_cb") and self.git_smart_tests_cb.isChecked() else ""
             build_txt = " + Build" if hasattr(self, "git_build_exe_cb") and self.git_build_exe_cb.isChecked() else ""
             deploy_txt = " + Deploy" if hasattr(self, "git_deploy_artifact_cb") and self.git_deploy_artifact_cb.isChecked() else ""
-            features.append(f"🛡️ {hooks_count} Hooks{tags_txt}{renew_txt}{smart_txt}{build_txt}{deploy_txt}")
+            lint_parts = []
+            if hasattr(self, "git_markdown_lint_cb") and self.git_markdown_lint_cb.isChecked():
+                lint_parts.append("MD")
+            if hasattr(self, "git_json_lint_cb") and self.git_json_lint_cb.isChecked():
+                lint_parts.append("JSON")
+            if hasattr(self, "git_yaml_lint_cb") and self.git_yaml_lint_cb.isChecked():
+                lint_parts.append("YAML")
+            if hasattr(self, "git_lint_gate_cb") and self.git_lint_gate_cb.isChecked():
+                lint_parts.append("Code")
+            lint_txt = f" + Lint({','.join(lint_parts)})" if lint_parts else ""
+            features.append(f"🛡️ {hooks_count} Hooks{tags_txt}{renew_txt}{smart_txt}{lint_txt}{build_txt}{deploy_txt}")
         else:
             features.append("🛡️ Hooks inaktiv")
 
@@ -1599,6 +1657,14 @@ class MainWindow(QMainWindow):
             "external_repo": self.git_external_repo_input.text().strip() if (hasattr(self, "git_deploy_artifact_cb") and self.git_deploy_artifact_cb.isChecked()) else None,
             "external_repo_branch": self.git_external_branch_input.text().strip() if (hasattr(self, "git_deploy_artifact_cb") and self.git_deploy_artifact_cb.isChecked()) else None,
             "external_repo_dir": self.git_external_dir_input.text().strip() if (hasattr(self, "git_deploy_artifact_cb") and self.git_deploy_artifact_cb.isChecked()) else None,
+            "enable_markdown_lint": self.git_markdown_lint_cb.isChecked() if hasattr(self, "git_markdown_lint_cb") else True,
+            "markdown_lint_cmd": self.git_markdown_lint_cmd_input.text().strip() if (hasattr(self, "git_markdown_lint_cb") and self.git_markdown_lint_cb.isChecked() and self.git_markdown_lint_cmd_input.text().strip()) else None,
+            "enable_json_lint": self.git_json_lint_cb.isChecked() if hasattr(self, "git_json_lint_cb") else True,
+            "json_lint_cmd": self.git_json_lint_cmd_input.text().strip() if (hasattr(self, "git_json_lint_cb") and self.git_json_lint_cb.isChecked() and self.git_json_lint_cmd_input.text().strip()) else None,
+            "enable_yaml_lint": self.git_yaml_lint_cb.isChecked() if hasattr(self, "git_yaml_lint_cb") else False,
+            "yaml_lint_cmd": self.git_yaml_lint_cmd_input.text().strip() if (hasattr(self, "git_yaml_lint_cb") and self.git_yaml_lint_cb.isChecked() and self.git_yaml_lint_cmd_input.text().strip()) else None,
+            "enable_lint_gate": self.git_lint_gate_cb.isChecked() if hasattr(self, "git_lint_gate_cb") else False,
+            "lint_cmd": self.git_lint_cmd_input.text().strip() if (hasattr(self, "git_lint_gate_cb") and self.git_lint_gate_cb.isChecked() and self.git_lint_cmd_input.text().strip()) else None,
             "selected_git_hooks": [
                 h_id for h_id, cb in self.hook_checkboxes.items() if cb.isChecked()
             ],
