@@ -1,0 +1,26 @@
+{% set build_tool = bundler | default('esbuild') %}
+{
+  "compilerOptions": {
+    "module": "Node16",
+    "target": "ES2022",
+    "lib": [
+      "ES2022"
+    ],
+    "sourceMap": true,
+    "rootDir": "src",
+    "outDir": "{% if build_tool == 'esbuild' %}dist{% else %}out{% endif %}",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    ".vscode-test",
+    "tests"
+  ]
+}
+

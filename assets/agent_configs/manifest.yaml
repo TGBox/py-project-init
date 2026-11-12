@@ -59,6 +59,14 @@ rules:
     templates: ["web-frontend", "web-fullstack"]
     default: true
 
+  - id: "vscode_extension_guidelines"
+    name: "VS Code Extension Best Practices"
+    description: "VS Code Extension API: Sauberes Disposable-Management, Manifest-Deklarationen, sichere Webviews (CSP/Nonce) und VSIX-Packaging."
+    file: "rules/vscode_extension_guidelines.md"
+    languages: ["TypeScript"]
+    templates: ["vscode-extension"]
+    default: true
+
   - id: "go_standards"
     name: "Go & Modul-Standards"
     description: "Idiomatisches Go: Klare Fehlerbehandlung (`if err != nil`), strukturierte Interfaces, Concurrency mit Goroutinen/Channels und schlanke Abhängigkeiten."

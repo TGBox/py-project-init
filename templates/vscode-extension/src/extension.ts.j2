@@ -1,0 +1,62 @@
+{% set ext_type = extension_type | default('command') %}
+import * as vscode from 'vscode';
+{% if ext_type == 'webview' %}
+import { SidebarWebviewProvider } from './webviewProvider';
+{% elif ext_type == 'treeview' %}
+import { ProjectTreeDataProvider } from './treeDataProvider';
+{% endif %}
+
+/**
+ * Formats the greeting message using user configuration or default fallback.
+ */
+export function formatGreeting(customGreeting?: string): string {
+  const trimmed = (customGreeting ?? '').trim();
+  return trimmed.length > 0 ? trimmed : 'Hallo aus {{ project_name }}!';
+}
+
+/**
+ * Called when the extension is activated.
+ */
+export function activate(context: vscode.ExtensionContext): void {
+  const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+  statusBarItem.text = '$(rocket) {{ project_name }}';
+  statusBarItem.tooltip = '{{ project_name }}: Klicken zum Ausführen';
+  statusBarItem.command = '{{ project_name }}.helloWorld';
+  statusBarItem.show();
+
+  const helloDisposable = vscode.commands.registerCommand('{{ project_name }}.helloWorld', () => {
+    const config = vscode.workspace.getConfiguration('{{ project_name }}');
+    const greeting = formatGreeting(config.get<string>('greeting'));
+    vscode.window.showInformationMessage(greeting);
+  });
+
+{% if ext_type == 'webview' %}
+  const webviewProvider = new SidebarWebviewProvider(context.extensionUri);
+  const webviewDisposable = vscode.window.registerWebviewViewProvider(
+    SidebarWebviewProvider.viewType,
+    webviewProvider
+  );
+  context.subscriptions.push(webviewDisposable);
+{% elif ext_type == 'treeview' %}
+  const treeProvider = new ProjectTreeDataProvider();
+  const treeViewDisposable = vscode.window.registerTreeDataProvider(
+    '{{ project_name }}.treeView',
+    treeProvider
+  );
+  const refreshDisposable = vscode.commands.registerCommand('{{ project_name }}.refreshTree', () => {
+    treeProvider.refresh();
+    vscode.window.showInformationMessage('{{ project_name }}: Baumansicht aktualisiert.');
+  });
+  context.subscriptions.push(treeViewDisposable, refreshDisposable);
+{% endif %}
+
+  context.subscriptions.push(statusBarItem, helloDisposable);
+}
+
+/**
+ * Called when the extension is deactivated.
+ */
+export function deactivate(): void {
+  // Clean up resources if necessary
+}
+

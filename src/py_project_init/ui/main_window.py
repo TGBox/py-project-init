@@ -1161,6 +1161,14 @@ class MainWindow(QMainWindow):
                 "format": "prettier --write .",
                 "lint": "eslint .",
             }
+        elif "vscode" in t_id:
+            return {
+                "compile": "node esbuild.mjs",
+                "watch": "node esbuild.mjs --watch",
+                "test": "vitest run",
+                "package": "npx @vscode/vsce package",
+                "lint": "eslint src",
+            }
         elif "node" in t_id or "node" in lang or "typescript" in lang:
             return {
                 "main": "node dist/index.js",

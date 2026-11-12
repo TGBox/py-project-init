@@ -1,0 +1,52 @@
+{% set ext_type = extension_type | default('command') %}
+{% set build_tool = bundler | default('esbuild') %}
+# {{ project_name }}
+
+{{ description or 'Eine VS Code Extension in TypeScript.' }}
+
+## Funktionen
+
+- **Befehl (`{{ project_name }}.helloWorld`):** Zeigt eine konfigurierbare Begrüßungsnachricht an (`Strg+Umschalt+P` -> `{{ project_name }}: Hallo Welt anzeigen`).
+- **Statusleiste:** Direkter Schnellzugriff über den Eintrag in der rechten VS Code Statusleiste.
+{% if ext_type == 'webview' %}
+- **Sidebar Webview (`{{ project_name }}.sidebarView`):** Eigene HTML/CSS/JS-Ansicht in der Explorer-Seitenleiste mit Content Security Policy und Nachrichten-Austausch.
+{% elif ext_type == 'treeview' %}
+- **Sidebar TreeView (`{{ project_name }}.treeView`):** Hierarchische Baumansicht in der Explorer-Seitenleiste inklusive Refresh-Befehl.
+{% endif %}
+
+## Entwicklung starten
+
+1. Abhängigkeiten installieren:
+
+   ```bash
+   npm install
+   ```
+
+2. Projekt in VS Code öffnen und **`F5`** drücken:
+   - Dies kompiliert die Erweiterung automatisch (`npm: compile`) und startet ein neues **Extension Development Host**-Fenster mit geladener Extension.
+
+## Nützliche Befehle
+
+```bash
+# Einmalig kompilieren ({% if build_tool == 'esbuild' %}esbuild -> dist/extension.js{% else %}tsc -> out/extension.js{% endif %})
+npm run compile
+
+# Watch-Modus für kontinuierliche Entwicklung
+npm run watch
+
+# TypeScript-Typprüfung
+npm run typecheck
+
+# Unit-Tests mit Vitest ausführen
+npm test
+
+# Installierbares .vsix-Paket erstellen
+npm run package
+```
+
+## Einstellungen
+
+Diese Erweiterung stellt folgende VS Code Einstellung bereit:
+
+- `{{ project_name }}.greeting`: Benutzerdefinierter Begrüßungstext für den Befehl.
+

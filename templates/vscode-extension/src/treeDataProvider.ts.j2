@@ -1,0 +1,57 @@
+import * as vscode from 'vscode';
+
+export class ProjectTreeItem extends vscode.TreeItem {
+  constructor(
+    public readonly label: string,
+    public readonly descriptionText: string,
+    public readonly collapsibleState: vscode.TreeItemCollapsibleState
+  ) {
+    super(label, collapsibleState);
+    this.tooltip = `${this.label} – ${this.descriptionText}`;
+    this.description = this.descriptionText;
+  }
+}
+
+/**
+ * Provides hierarchical items for the Explorer sidebar TreeView.
+ */
+export class ProjectTreeDataProvider implements vscode.TreeDataProvider<ProjectTreeItem> {
+  private _onDidChangeTreeData: vscode.EventEmitter<ProjectTreeItem | undefined | void> =
+    new vscode.EventEmitter<ProjectTreeItem | undefined | void>();
+  readonly onDidChangeTreeData: vscode.Event<ProjectTreeItem | undefined | void> =
+    this._onDidChangeTreeData.event;
+
+  public refresh(): void {
+    this._onDidChangeTreeData.fire();
+  }
+
+  public getTreeItem(element: ProjectTreeItem): vscode.TreeItem {
+    return element;
+  }
+
+  public getChildren(element?: ProjectTreeItem): Thenable<ProjectTreeItem[]> {
+    if (element) {
+      return Promise.resolve([]);
+    }
+
+    const items: ProjectTreeItem[] = [
+      new ProjectTreeItem(
+        'Status',
+        'Aktiv',
+        vscode.TreeItemCollapsibleState.None
+      ),
+      new ProjectTreeItem(
+        'Befehl ausführen',
+        '{{ project_name }}.helloWorld',
+        vscode.TreeItemCollapsibleState.None
+      ),
+    ];
+    items[1].command = {
+      command: '{{ project_name }}.helloWorld',
+      title: 'Hallo Welt anzeigen',
+    };
+
+    return Promise.resolve(items);
+  }
+}
+

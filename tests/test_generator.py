@@ -28,6 +28,7 @@ class TestTemplateManager(unittest.TestCase):
         self.assertIn("rust-gui", self.manager.templates)
         self.assertIn("node-ts", self.manager.templates)
         self.assertIn("unity-game", self.manager.templates)
+        self.assertIn("vscode-extension", self.manager.templates)
 
     def test_get_available_hooks(self):
         """Ensures hooks are discovered with metadata."""
@@ -85,6 +86,12 @@ class TestTemplateManager(unittest.TestCase):
         unity_rec = self.manager.get_recommended_agent_configs("unity-game", "C#")
         self.assertIn("unity_csharp_standards", unity_rec["rules"])
         self.assertIn("unity-meta-checker", unity_rec["skills"])
+
+        # VS Code Extension recommendations
+        vscode_rec = self.manager.get_recommended_agent_configs("vscode-extension", "TypeScript")
+        self.assertIn("typescript_standards", vscode_rec["rules"])
+        self.assertIn("vscode_extension_guidelines", vscode_rec["rules"])
+        self.assertNotIn("web_frontend_standards", vscode_rec["rules"])
 
     def test_merge_gitignore(self):
         """Verifies intelligent merging of gitignore without duplicates."""
@@ -522,6 +529,63 @@ class TestTemplateManager(unittest.TestCase):
         self.assertIn("KeyCode.F11", files["Assets/Scripts/Core/ScreenModeController.cs"]["content"])
         self.assertIn("com.unity.inputsystem", files["Packages/manifest.json"]["content"])
 
+    def test_preview_vscode_extension(self):
+        """Verifies template rendering and preview for vscode-extension variants."""
+        import json
+
+        # 1. Webview + esbuild variant
+        ctx_webview = {
+            "project_name": "my-vscode-ext",
+            "project_slug": "my_vscode_ext",
+            "description": "Test VS Code Extension",
+            "author": "Dev Author",
+            "license": "MIT",
+            "extension_type": "webview",
+            "bundler": "esbuild",
+            "github_actions": True,
+            "enable_agent_configs": True,
+            "selected_agent_rules": ["vscode_extension_guidelines"],
+        }
+        files_wv = self.manager.preview("vscode-extension", ctx_webview)
+        self.assertIn("package.json", files_wv)
+        self.assertIn("tsconfig.json", files_wv)
+        self.assertIn("esbuild.mjs", files_wv)
+        self.assertIn(".vscode/launch.json", files_wv)
+        self.assertIn(".vscode/tasks.json", files_wv)
+        self.assertIn(".vscode/extensions.json", files_wv)
+        self.assertIn("src/extension.ts", files_wv)
+        self.assertIn("src/webviewProvider.ts", files_wv)
+        self.assertNotIn("src/treeDataProvider.ts", files_wv)
+        self.assertIn("tests/extension.test.ts", files_wv)
+        self.assertIn(".github/workflows/ci.yml", files_wv)
+        self.assertIn(".agents/rules/vscode_extension_guidelines.md", files_wv)
+
+        # Verify all JSON files in preview are valid strict JSON
+        for rel_path, entry in files_wv.items():
+            if rel_path.endswith(".json") and not entry["is_dir"]:
+                parsed = json.loads(entry["content"])
+                self.assertIsInstance(parsed, dict)
+
+        pkg_wv = json.loads(files_wv["package.json"]["content"])
+        self.assertEqual(pkg_wv["main"], "./dist/extension.js")
+        self.assertIn("views", pkg_wv["contributes"])
+
+        # 2. TreeView + tsc variant
+        ctx_tree = {
+            "project_name": "my-tree-ext",
+            "project_slug": "my_tree_ext",
+            "extension_type": "treeview",
+            "bundler": "tsc",
+            "github_actions": False,
+        }
+        files_tree = self.manager.preview("vscode-extension", ctx_tree)
+        self.assertNotIn("esbuild.mjs", files_tree)
+        self.assertIn("src/treeDataProvider.ts", files_tree)
+        self.assertNotIn("src/webviewProvider.ts", files_tree)
+        self.assertNotIn(".github/workflows/ci.yml", files_tree)
+        pkg_tree = json.loads(files_tree["package.json"]["content"])
+        self.assertEqual(pkg_tree["main"], "./out/extension.js")
+
     def test_retrofit_functionality(self):
         """Verifies retrofitting hooks and agent configs into an existing project."""
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -916,6 +980,9 @@ class TestTemplateManager(unittest.TestCase):
             ("node-ts", {}),
             ("unity-game", {"unity_version": "6000.0", "render_pipeline": "urp", "dimension": "3d"}),
             ("unity-game", {"unity_version": "2022.3", "render_pipeline": "builtin", "dimension": "2d"}),
+            ("vscode-extension", {"extension_type": "command", "bundler": "esbuild"}),
+            ("vscode-extension", {"extension_type": "webview", "bundler": "esbuild"}),
+            ("vscode-extension", {"extension_type": "treeview", "bundler": "tsc"}),
         ]
 
         for t_id, extra_ctx in variants:

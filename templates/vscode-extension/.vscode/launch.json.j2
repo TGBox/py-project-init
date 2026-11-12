@@ -1,0 +1,19 @@
+{% set build_tool = bundler | default('esbuild') %}
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Extension starten (Extension Development Host)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/{% if build_tool == 'esbuild' %}dist{% else %}out{% endif %}/**/*.js"
+      ],
+      "preLaunchTask": "npm: compile"
+    }
+  ]
+}
+

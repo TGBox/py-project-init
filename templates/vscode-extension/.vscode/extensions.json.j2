@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint"{% if (bundler | default('esbuild')) == 'esbuild' %},
+    "connor4312.esbuild-problem-matchers"
+{% else %}
+
+{% endif %}
+  ]
+}
+

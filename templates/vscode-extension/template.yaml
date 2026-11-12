@@ -1,0 +1,52 @@
+name: "VS Code Extension"
+language: "TypeScript"
+description: "VS Code Erweiterung mit TypeScript: F5-Debug-Setup (.vscode/launch.json), Commands, optionalem Sidebar Webview/TreeView, esbuild/tsc Bundling, Vitest Unit-Tests und VSIX-Packaging (@vscode/vsce)."
+options:
+  - id: "extension_type"
+    type: "select"
+    label: "Extension-Typ"
+    description: "Wähle die primäre Architektur deiner VS Code Erweiterung"
+    default: "command"
+    choices:
+      - value: "command"
+        label: "Command & Statusbar Extension"
+        description: "Klassische Erweiterung mit Command-Palette-Befehlen, Statusbar-Item und Benutzereinstellungen."
+      - value: "webview"
+        label: "Sidebar Webview Provider"
+        description: "Erweiterung mit eigener Sidebar-Webview (HTML/CSS/JS), Content Security Policy und bidirektionalem Messaging."
+      - value: "treeview"
+        label: "Sidebar TreeView Provider"
+        description: "Erweiterung mit nativer TreeView-Ansicht in der Explorer-Seitenleiste zur hierarchischen Darstellung."
+  - id: "bundler"
+    type: "select"
+    label: "Build & Bundler"
+    description: "Wähle das Build-Tool für die Erweiterung"
+    default: "esbuild"
+    choices:
+      - value: "esbuild"
+        label: "esbuild (Schnelles Bundling, empfohlen)"
+        description: "Bündelt die gesamte Extension in eine optimierte Datei (dist/extension.js) für schnelle Aktivierungszeiten."
+      - value: "tsc"
+        label: "TypeScript Compiler (tsc)"
+        description: "Klassische Einzeldatei-Kompilierung nach out/extension.js ohne zusätzlichen Bundler."
+  - id: "github_actions"
+    type: "bool"
+    label: "GitHub Actions CI (Typecheck, Test & VSIX Build)"
+    description: "Automatisierter CI-Workflow für TypeScript-Prüfung, Unit-Tests und VSIX-Paketierung"
+    default: true
+file_conditions:
+  - pattern: ".github/"
+    when: "github_actions"
+  - pattern: "esbuild.mjs"
+    when: "bundler"
+    value: "esbuild"
+  - pattern: "src/webviewProvider.ts"
+    when: "extension_type"
+    value: "webview"
+  - pattern: "src/treeDataProvider.ts"
+    when: "extension_type"
+    value: "treeview"
+hooks:
+  post_create:
+    - ["npm", "install"]
+

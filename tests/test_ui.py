@@ -121,6 +121,13 @@ class TestMainWindow(unittest.TestCase):
             self.assertEqual(unity_scripts.get("editor"), "Unity -projectPath .")
             self.assertIn("Unity -batchmode", unity_scripts.get("test"))
 
+        idx_vscode = self.window.template_combo.findData("vscode-extension")
+        if idx_vscode >= 0:
+            self.window.template_combo.setCurrentIndex(idx_vscode)
+            vscode_scripts = self.window._get_custom_scripts_dict()
+            self.assertEqual(vscode_scripts.get("compile"), "node esbuild.mjs")
+            self.assertEqual(vscode_scripts.get("package"), "npx @vscode/vsce package")
+
     def test_preview_dialog(self):
         """Tests that PreviewDialog loads files and displays content on selection and clicks."""
         # 1. Test dict format as produced by generator.preview()

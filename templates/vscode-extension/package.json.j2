@@ -1,0 +1,106 @@
+{% set ext_type = extension_type | default('command') %}
+{% set build_tool = bundler | default('esbuild') %}
+{% set pub_id = (author or 'local-dev') | lower | replace(' ', '-') | replace('_', '-') %}
+{
+  "name": "{{ project_name | lower | replace('_', '-') }}",
+  "displayName": "{{ project_name }}",
+  "description": "{{ description or 'VS Code Extension' }}",
+  "version": "0.1.0",
+  "publisher": "{{ pub_id }}",
+{% if author %}
+  "author": "{{ author }}{% if author_email %} <{{ author_email }}>{% endif %}",
+{% endif %}
+{% if license %}
+  "license": "{{ license }}",
+{% endif %}
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "{% if build_tool == 'esbuild' %}./dist/extension.js{% else %}./out/extension.js{% endif %}",
+  "contributes": {
+    "commands": [
+      {
+        "command": "{{ project_name }}.helloWorld",
+        "title": "{{ project_name }}: Hallo Welt anzeigen"
+      }{% if ext_type == 'treeview' %},
+      {
+        "command": "{{ project_name }}.refreshTree",
+        "title": "{{ project_name }}: Ansicht aktualisieren"
+      }
+{% else %}
+
+{% endif %}
+    ]{% if ext_type == 'webview' %},
+    "views": {
+      "explorer": [
+        {
+          "type": "webview",
+          "id": "{{ project_name }}.sidebarView",
+          "name": "{{ project_name }}"
+        }
+      ]
+    }{% elif ext_type == 'treeview' %},
+    "views": {
+      "explorer": [
+        {
+          "id": "{{ project_name }}.treeView",
+          "name": "{{ project_name }}"
+        }
+      ]
+    }{% endif %},
+    "configuration": {
+      "title": "{{ project_name }}",
+      "properties": {
+        "{{ project_name }}.greeting": {
+          "type": "string",
+          "default": "Hallo aus {{ project_name }}!",
+          "description": "Begrüßungstext, der beim Ausführen des Befehls angezeigt wird."
+        }
+      }
+    }
+  },
+  "scripts": {
+{% if build_tool == 'esbuild' %}
+{% set scripts = {
+  "vscode:prepublish": "npm run package-bundle",
+  "compile": "node esbuild.mjs",
+  "watch": "node esbuild.mjs --watch",
+  "package-bundle": "node esbuild.mjs --production",
+  "package": "npx @vscode/vsce package",
+  "typecheck": "tsc --noEmit",
+  "lint": "eslint src",
+  "test": "vitest run"
+} %}
+{% else %}
+{% set scripts = {
+  "vscode:prepublish": "npm run compile",
+  "compile": "tsc -p ./",
+  "watch": "tsc -watch -p ./",
+  "package": "npx @vscode/vsce package",
+  "typecheck": "tsc --noEmit",
+  "lint": "eslint src",
+  "test": "vitest run"
+} %}
+{% endif %}
+{% if custom_scripts %}{% set _ = scripts.update(custom_scripts) %}{% endif %}
+{% for s_name, s_cmd in scripts.items() %}
+    "{{ s_name }}": "{{ s_cmd }}"{{ "," if not loop.last else "" }}
+{% endfor %}
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.0.0",
+{% if build_tool == 'esbuild' %}
+    "esbuild": "^0.24.0",
+{% endif %}
+    "eslint": "^9.14.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
+
