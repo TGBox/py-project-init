@@ -82,6 +82,7 @@ Ein modernes, grafisches Werkzeug (PySide6 / Qt) zur schnellen und konsistenten 
 
 | Vorlage | Sprache / Ökosystem | Enthaltene Features & Optionen |
 | :--- | :--- | :--- |
+| **Leeres Projekt** *(Standard)* | Keine (Sprachunabhängig) | Sprachunabhängiges Basisprojekt ohne vordefinierte Programmiersprache (`git init`, `README.md`, `.gitignore`, optionale Git-Hooks & Agent-Configs) |
 | **Python CLI** | Python (uv / pyproject.toml) | `uv init` + `uv venv` Pipeline, modulares Paket, Tests mit pytest, Ruff, optionale GitHub Actions CI & Dockerfile |
 | **Python FastAPI** | Python (FastAPI, uv) | `uv init` + `uv venv` Pipeline, REST API mit Pydantic, Healthchecks, optionale GitHub Actions CI & Dockerfile |
 | **Python GUI** | Python (Desktop GUI) | `uv init` + `uv venv` Pipeline, GUI-Framework (**PySide6**, **PyQt6**, **Tkinter**, **wxPython**, **Kivy**) mit vergleichender Entscheidungshilfe |

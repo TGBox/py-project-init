@@ -567,7 +567,7 @@ class CreateTemplateDialog(QDialog):
         lbl_lang = QLabel("Programmiersprache:")
         lbl_lang.setObjectName("formLabel")
         self.lang_combo = QComboBox()
-        self.lang_combo.addItems(["Python", "Rust", "Node / TypeScript", "Andere"])
+        self.lang_combo.addItems(["Keine", "Python", "Rust", "Node / TypeScript", "Go", "C#", "Andere"])
 
         lbl_desc = QLabel("Beschreibung:")
         lbl_desc.setObjectName("formLabel")

@@ -340,7 +340,7 @@ def run_cli(args: list[str] | None = None) -> int:
         parser.print_help()
         return 1
 
-    template_id = parsed.template or "python-cli"
+    template_id = parsed.template or "empty-project"
     if template_id not in manager.templates:
         print(
             f"Fehler: Vorlage '{template_id}' existiert nicht. Siehe --list.",

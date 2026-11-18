@@ -15,9 +15,28 @@ class TestCLI(unittest.TestCase):
             code = run_cli(["--list"])
         self.assertEqual(code, 0)
         output = out.getvalue()
+        self.assertIn("empty-project", output)
         self.assertIn("python-cli", output)
         self.assertIn("node-ts", output)
         self.assertIn("rust-cli", output)
+
+    def test_generate_default_empty_project_via_cli(self):
+        """Verifies generating a project from CLI without -t uses empty-project by default."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out = io.StringIO()
+            with patch("sys.stdout", out):
+                code = run_cli([
+                    "default_empty_app",
+                    "-p", temp_dir,
+                    "-d", "Ohne Sprachwahl erstellt",
+                ])
+            self.assertEqual(code, 0)
+            target = Path(temp_dir) / "default_empty_app"
+            self.assertTrue(target.is_dir())
+            self.assertTrue((target / ".git").is_dir())
+            self.assertTrue((target / "README.md").exists())
+            self.assertTrue((target / ".gitignore").exists())
+            self.assertFalse((target / "pyproject.toml").exists())
 
     def test_generate_project_via_cli(self):
         """Verifies generating a project from command line."""

@@ -59,10 +59,11 @@ class TemplateManager:
     def reload_templates(self):
         """Reloads all templates from all configured directories."""
         self.templates.clear()
+        loaded: dict[str, dict] = {}
         for base_dir in self.templates_dirs:
             if not base_dir.exists():
                 continue
-            for folder in base_dir.iterdir():
+            for folder in sorted(base_dir.iterdir(), key=lambda p: p.name):
                 yaml_file = folder / "template.yaml"
                 if folder.is_dir() and yaml_file.exists():
                     try:
@@ -70,9 +71,14 @@ class TemplateManager:
                             config = yaml.safe_load(f) or {}
                             config["id"] = folder.name
                             config["path"] = folder
-                            self.templates[folder.name] = config
+                            loaded[folder.name] = config
                     except Exception as e:
                         print(f"Fehler beim Laden von {yaml_file}: {e}")
+
+        # Ensure empty-project is always listed first as the default template
+        if "empty-project" in loaded:
+            self.templates["empty-project"] = loaded.pop("empty-project")
+        self.templates.update(loaded)
 
     def get_available_hooks(self) -> list[dict]:
         """Discovers available git hooks from hooks directory."""

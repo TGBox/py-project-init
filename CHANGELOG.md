@@ -1,8 +1,15 @@
 # Changelog
 
+## SemVer v3.2.0
+
+- 2026-11-18 (000b14e): feat: add new empty project template for creating a skeleton project without having to decide on the language up front
+
 ## SemVer v3.1.3
 
-- 2026-11-02 (488cd05): feat: update current fine granular hook configurations to include optional markdownlinter and json linter, which are always selected by default, add additional yaml linter and regular code linter (like ruff and clippy), add corresponding ui elements to support the new options, add new test suites, bump semver
+- 2026-11-12 (7afd8a1): feat: add new template for vscode extension projects
+- 2026-11-03 (991e6e4): fix: update uv.lock
+- 2026-11-02 (8957ffd): Merge pull request #7 from TGBox/linter-extensions
+- 2026-11-02 (e1df7d7): feat: update current fine granular hook configurations to include optional markdownlinter and json linter, which are always selected by default, add additional yaml linter and regular code linter (like ruff and clippy), add corresponding ui elements to support the new options, add new test suites, bump semver
 
 ## SemVer v3.0.3
 

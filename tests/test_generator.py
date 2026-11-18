@@ -14,7 +14,10 @@ class TestTemplateManager(unittest.TestCase):
         self.manager = TemplateManager(self.templates_dir)
 
     def test_templates_loaded(self):
-        """Ensures all standard templates are loaded."""
+        """Ensures all standard templates are loaded and empty-project is first."""
+        self.assertIn("empty-project", self.manager.templates)
+        self.assertEqual(next(iter(self.manager.templates.keys())), "empty-project")
+        self.assertEqual(self.manager.templates["empty-project"].get("language"), "Keine")
         self.assertIn("python-cli", self.manager.templates)
         self.assertIn("python-fastapi", self.manager.templates)
         self.assertIn("python-gui", self.manager.templates)
@@ -93,6 +96,11 @@ class TestTemplateManager(unittest.TestCase):
         self.assertIn("vscode_extension_guidelines", vscode_rec["rules"])
         self.assertNotIn("web_frontend_standards", vscode_rec["rules"])
 
+        # Empty Project recommendations (no language chosen)
+        empty_rec = self.manager.get_recommended_agent_configs("empty-project", "Keine")
+        self.assertEqual(empty_rec["rules"], ["general_guidelines"])
+        self.assertEqual(empty_rec["skills"], ["code-review", "test-runner"])
+
     def test_merge_gitignore(self):
         """Verifies intelligent merging of gitignore without duplicates."""
         existing = ".venv/\n__pycache__/\nbuild/\n"
@@ -165,6 +173,47 @@ class TestTemplateManager(unittest.TestCase):
             self.assertIn("MIT", pyproject_content)
             self.assertIn('lint = "ruff check ."', pyproject_content)
             self.assertIn('format = "ruff format ."', pyproject_content)
+
+    def test_generate_empty_project(self):
+        """Verifies generating a project with the language-agnostic empty-project template."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target_dir = Path(temp_dir) / "blank_repo"
+            context = {
+                "project_name": "blank-repo",
+                "project_slug": "blank_repo",
+                "description": "Leeres Projekt ohne spezifische Sprache",
+                "language": "Keine",
+                "author": "Tester",
+                "author_email": "tester@example.com",
+                "license": "MIT",
+                "custom_scripts": {},
+                "enable_git_hooks": True,
+                "selected_git_hooks": ["pre-commit", "commit-msg", "post-commit"],
+                "enable_agent_configs": True,
+                "selected_agent_rules": ["general_guidelines"],
+                "selected_agent_skills": ["code-review"],
+            }
+
+            problems = self.manager.generate(
+                target_dir=target_dir,
+                template_id="empty-project",
+                context=context,
+                log_callback=lambda msg: None,
+            )
+            self.assertEqual(problems, [])
+            self.assertTrue((target_dir / ".git").exists())
+            self.assertTrue((target_dir / "README.md").exists())
+            self.assertTrue((target_dir / ".gitignore").exists())
+            self.assertTrue((target_dir / "AGENTS.md").exists())
+            self.assertTrue((target_dir / ".git" / "hooks" / "pre-commit").exists())
+            self.assertFalse((target_dir / "pyproject.toml").exists())
+            self.assertFalse((target_dir / "package.json").exists())
+            self.assertFalse((target_dir / "Cargo.toml").exists())
+
+            readme_txt = (target_dir / "README.md").read_text(encoding="utf-8")
+            self.assertIn("# blank-repo", readme_txt)
+            self.assertIn("Leeres Projekt ohne spezifische Sprache", readme_txt)
+            self._assert_markdownlint_compliant(readme_txt)
 
     def test_generate_node_ts_project(self):
         """Verifies that a TypeScript project generates correct package.json scripts and test files."""
@@ -960,6 +1009,7 @@ class TestTemplateManager(unittest.TestCase):
         mock_subp.return_value.stderr = ""
 
         variants = [
+            ("empty-project", {}),
             ("web-frontend", {"framework": "react"}),
             ("web-frontend", {"framework": "vue"}),
             ("web-frontend", {"framework": "svelte"}),

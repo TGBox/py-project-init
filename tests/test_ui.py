@@ -23,6 +23,12 @@ class TestMainWindow(unittest.TestCase):
         """Verifies that all widgets and new options are properly loaded."""
         self.assertIsNotNone(self.window.template_combo)
         self.assertGreater(self.window.template_combo.count(), 0)
+        # Empty project template must be the default selection on startup
+        self.assertEqual(self.window.template_combo.currentData(), "empty-project")
+        self.assertEqual(self.window._get_recommended_scripts("empty-project"), {})
+        self.assertEqual(len(self.window._get_custom_scripts_dict()), 0)
+        self.assertTrue(self.window.agent_rule_checkboxes["general_guidelines"].isChecked())
+        self.assertFalse(self.window.agent_rule_checkboxes["python_standards"].isChecked())
 
         # Check git hooks section - all 8 client hooks
         self.assertTrue(self.window.git_hooks_enable_cb.isChecked())
@@ -58,7 +64,7 @@ class TestMainWindow(unittest.TestCase):
         for key in ["main", "test", "build", "format", "lint"]:
             self.assertIn(key, recommended)
 
-        self.window._apply_recommended_scripts()
+        self.window._apply_recommended_scripts("python-cli")
         active_scripts = self.window._get_custom_scripts_dict()
         self.assertIn("main", active_scripts)
         self.assertIn("test", active_scripts)

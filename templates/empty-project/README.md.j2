@@ -1,0 +1,16 @@
+# {{ project_name }}
+{% if description %}
+
+{{ description }}
+{% endif %}
+{% if author or license %}
+
+## Projektinformationen
+{% if author %}
+
+- **Autor:** {{ author }}{% if author_email %} ({{ author_email }}){% endif %}
+{% endif %}
+{% if license %}
+- **Lizenz:** {{ license }}
+{% endif %}
+{% endif %}

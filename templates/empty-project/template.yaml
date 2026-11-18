@@ -1,0 +1,5 @@
+name: "Leeres Projekt"
+language: "Keine"
+description: "Sprachunabhängiges leeres Basisprojekt ohne vordefinierte Programmiersprache (Git-Repository, README, .gitignore, optionale Git-Hooks & Agent-Configs)"
+options: []
+hooks: {}

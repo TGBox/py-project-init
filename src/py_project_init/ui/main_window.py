@@ -1229,6 +1229,8 @@ class MainWindow(QMainWindow):
                 "format": "src.tools:format_code",
                 "lint": "src.tools:lint_code",
             }
+        elif "empty" in t_id or lang in ("", "keine", "none", "universal"):
+            return {}
         else:
             # Python CLI & GUI
             return {
@@ -1363,19 +1365,22 @@ class MainWindow(QMainWindow):
 
     def _populate_templates(self):
         current_selection = self.template_combo.currentData()
+        self.template_combo.blockSignals(True)
         self.template_combo.clear()
         for t_id, meta in self.template_manager.templates.items():
-            label = f"{meta.get('name', t_id)} ({meta.get('language', 'Universal')})"
+            lang = meta.get("language") or "Keine"
+            label = f"{meta.get('name', t_id)} ({lang})"
             self.template_combo.addItem(label, t_id)
 
-        # Restore saved template if available
-        saved_template = self.settings.value("last_template", "")
-        target_to_select = current_selection or saved_template
-
-        if target_to_select:
-            idx = self.template_combo.findData(target_to_select)
-            if idx >= 0:
-                self.template_combo.setCurrentIndex(idx)
+        # Default to 'empty-project' on startup; preserve current_selection when reloading templates
+        target_to_select = current_selection or "empty-project"
+        idx = self.template_combo.findData(target_to_select)
+        if idx < 0:
+            idx = 0
+        if self.template_combo.count() > 0:
+            self.template_combo.setCurrentIndex(idx)
+        self.template_combo.blockSignals(False)
+        self._on_template_changed()
 
     def _reload_templates(self):
         """Reloads all templates from disk and updates the selection."""
@@ -1469,7 +1474,13 @@ class MainWindow(QMainWindow):
         template_meta = self.template_manager.templates.get(template_id, {})
         self.template_desc_label.setText(template_meta.get("description", ""))
 
-        for opt in template_meta.get("options", []):
+        options = template_meta.get("options", [])
+        if not options:
+            empty_opt_lbl = QLabel("<i>Keine sprach- oder vorlagenspezifischen Zusatzoptionen für diese Vorlage.</i>")
+            empty_opt_lbl.setObjectName("mutedLabel")
+            self.options_layout.addWidget(empty_opt_lbl)
+
+        for opt in options:
             opt_type = opt.get("type", "bool")
             opt_id = opt.get("id")
 
